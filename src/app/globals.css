@@ -1,26 +1,89 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* RedZon 디자인 시스템 토큰 — Tailwind CSS 4 @theme */
+/* 출처: Design System — Components (redzon.pen) */
+@theme {
+  /* ── 색상 (Color) ─────────────────────────── */
+  /* 브랜드 */
+  --color-primary: #ff8400;
+  --color-primary-foreground: #1a1a1a;
+  --color-primary-soft: #fff3e6;
+
+  /* 표면 / 중립 */
+  --color-background: #f2f3f0;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f6f7f4;
+  --color-surface-muted: #eef0ec;
+  --color-hairline: #e6e8e3;
+  --color-hairline-strong: #d7d9d3;
+
+  /* 텍스트 */
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #5c5f5a;
+  --color-text-tertiary: #8a8d87;
+
+  /* 시맨틱 */
+  --color-success: #1e9e57;
+  --color-info: #2f74c0;
+  --color-warning: #c79a2e;
+  --color-danger: #d93c15;
+  --color-green-soft: #e8f5ee;
+  --color-blue-soft: #eaf1fb;
+  --color-red-soft: #fbeae5;
+
+  /* 배치 (Placement) */
+  --color-place-win-bg: #e3f1dd;
+  --color-place-win-fg: #0a7400;
+  --color-place-top10-bg: #eaf1fb;
+  --color-place-top10-fg: #2563a8;
+
+  /* 유틸리티 */
+  --color-tooltip-bg: #1f2937;
+  --color-chart-bar: #c3c5bf;
+
+  /* ── 타이포그래피 (Typography) ─────────────── */
+  --font-display: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-ui: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+
+  /* 타입 스케일 */
+  --text-display: 2.5rem; /* 40px */
+  --text-heading: 1.5rem; /* 24px */
+  --text-body: 1rem; /* 16px */
+  --text-caption: 0.8125rem; /* 13px */
+  --text-mono-numeral: 1.5rem; /* 24px */
+
+  /* ── 간격 & 그리드 (8px 기반) ─────────────── */
+  --spacing-space-1: 0.25rem;
+  --spacing-space-2: 0.5rem;
+  --spacing-space-3: 0.75rem;
+  --spacing-space-4: 1rem;
+  --spacing-space-5: 1.5rem;
+  --spacing-space-6: 2rem;
+  --spacing-space-7: 3rem;
+
+  /* ── 반경 (Radius) ────────────────────────── */
+  --radius-sm: 0.625rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-pill: 999px;
+
+  /* ── 그림자 (Shadow) ──────────────────────── */
+  --shadow-xs: 0px 1px 2px 0px #1a1a1a0d;
+  --shadow-sm: 0px 1px 3px 0px #1a1a1a0f;
+  --shadow-md: 0px 4px 16px 0px #1a1a1a12;
+  --shadow-lg: 0px 6px 20px 0px #1a1a1a1f;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    font-family: var(--font-ui);
+    background: var(--color-background);
+    color: var(--color-text-primary);
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* 숫자·통계 자리는 고정폭 숫자로 정렬 */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
 }
