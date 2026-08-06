@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Pretendard 동적 서브셋 @font-face — 별도 렌더블로킹 요청 대신 번들 CSS에 포함 (unicode-range로 지연 로드 유지) */
+@import "./fonts.css";
 
 /* RedZon 디자인 시스템 토큰 — Tailwind CSS 4 @theme */
 /* 출처: Design System — Components (redzon.pen) */
