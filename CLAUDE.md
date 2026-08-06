@@ -32,6 +32,13 @@ Vercel (SSR + Route Handlers) · Upstash Redis
 - 클래스 컴포넌트 금지 → 함수형만
 - `npm install`/`npm run` 등 npm 명령어 사용 금지 → `pnpm` 사용
 
+## 성능 규칙 (앞으로 구현 시 준수)
+- **이미지**: `next/image` **사용 금지** (Vercel 무료 이미지 최적화 한도) → 사전 압축한 webp/avif를 일반 `<img>`로 쓰고 `width`/`height` 지정해 CLS 방지
+- **무거운 라이브러리(Recharts 등)**: 차트·무거운 컴포넌트는 `next/dynamic`(`dynamic(() => import(...))`)으로 코드 스플리팅
+- **긴 목록(랭킹·매치 리스트)**: 가상화(`react-window`) 또는 `content-visibility: auto`로 렌더 비용 절감
+- **서드파티 스크립트(애널리틱스·뉴스 위젯 등)**: `next/script`의 `strategy`(`afterInteractive`/`lazyOnload`)로 로드
+- **SSR 데이터 패칭**: SEO 페이지(플레이어·랭킹)는 `fetch(url, { next: { revalidate: N } })`로 캐싱
+
 ## 브랜치
 기능·수정사항마다 `dev`에서 브랜치 생성 (`/branch` 사용), `dev`/`main` 직접 커밋 금지
 
