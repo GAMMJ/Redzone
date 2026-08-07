@@ -1,4 +1,5 @@
 // PUBG API 프록시 헬퍼 — axios로 PUBG 호출 + Upstash Redis 캐싱. 도메인 라우트(/api/pubg/*)가 공유한다.
+import "server-only"; // 클라 컴포넌트가 실수로 import하면 빌드타임 차단 (API 키 보호)
 import axios from "axios";
 import { Redis } from "@upstash/redis";
 
@@ -74,6 +75,20 @@ async function fetchAndStore(
     }
   }
   return payload;
+}
+
+// 서버 컴포넌트/배치용 — Response가 아닌 "데이터"를 반환하는 캐시 우선 조회. 실패 시 throw.
+export async function fetchPubgCached<T = unknown>(
+  shard: string,
+  path: string,
+  params: Record<string, string> = {},
+  ttl: number = CACHE_TTL,
+  { cacheKey: cacheKeyOverride, transform }: ProxyPubgOptions = {},
+): Promise<T> {
+  const cacheKey = buildCacheKey(shard, path, params, cacheKeyOverride);
+  const cached = await readCache(cacheKey);
+  if (cached !== null) return cached as T;
+  return (await fetchAndStore(shard, path, params, ttl, cacheKey, transform)) as T;
 }
 
 // 허용된 PUBG 하위 경로(path)만 프록시. 캐시 우선 조회 후 Response 반환.
