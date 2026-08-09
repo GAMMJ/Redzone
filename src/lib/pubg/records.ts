@@ -1,7 +1,15 @@
 import "server-only";
 import axios from "axios";
 import { fetchPubgCached } from "@/lib/pubgProxy";
-import type { Player, PlayerRankedResponse, RankedGameMode, RankedGameModeStats } from "@/types/player";
+import type { GameMode } from "@/lib/constants";
+import type {
+  Player,
+  PlayerRankedResponse,
+  PlayerSeasonResponse,
+  RankedGameMode,
+  RankedGameModeStats,
+  SeasonStats,
+} from "@/types/player";
 
 interface SeasonsResponse {
   data?: Array<{ id: string; attributes: { isCurrentSeason: boolean } }>;
@@ -50,6 +58,24 @@ export async function getPlayerRanked(
     return res.data?.attributes?.rankedGameModeStats ?? {};
   } catch {
     // 랭크 조회 실패(429·네트워크 등)는 티어 생략으로 degrade
+    return {};
+  }
+}
+
+// 플레이어 일반전 시즌 스탯(모드별) — 안 한 모드도 0값으로 내려올 수 있음
+export async function getPlayerSeason(
+  shard: string,
+  playerId: string,
+  seasonId: string,
+): Promise<Partial<Record<GameMode, SeasonStats>>> {
+  try {
+    const res = await fetchPubgCached<PlayerSeasonResponse>(
+      shard,
+      `players/${playerId}/seasons/${seasonId}`,
+    );
+    return res.data?.attributes?.gameModeStats ?? {};
+  } catch {
+    // 시즌 스탯 조회 실패(429·네트워크 등)는 일반전 카드 생략으로 degrade
     return {};
   }
 }
