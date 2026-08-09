@@ -2,7 +2,13 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Container from "@/components/layout/Container";
 import ProfileHeader from "@/components/player/ProfileHeader";
-import { getPlayerByName, getCurrentSeasonId, getPlayerRanked } from "@/lib/pubg/records";
+import ModeStats from "@/components/player/ModeStats";
+import {
+  getPlayerByName,
+  getCurrentSeasonId,
+  getPlayerRanked,
+  getPlayerSeason,
+} from "@/lib/pubg/records";
 import { isValidShard } from "@/lib/pubgProxy";
 
 interface PageParams {
@@ -19,14 +25,21 @@ function decodeName(raw: string): string {
   }
 }
 
-// 닉네임 → id → 현재 시즌 → 스쿼드 랭크(없으면 스쿼드 1인칭). 플레이어 없으면 null.
+// 닉네임 → id → 현재 시즌 → 모드별 랭크·일반전 스탯. 플레이어 없으면 null.
 async function loadProfile(platform: string, rawName: string) {
   const name = decodeName(rawName);
-  const player = await getPlayerByName(platform, name);
+  // 시즌 목록은 플레이어와 무관 + 30분 캐시(전 플레이어 공유)라 병렬로 당겨 TTFB를 줄인다.
+  const [player, seasonId] = await Promise.all([
+    getPlayerByName(platform, name),
+    getCurrentSeasonId(platform),
+  ]);
   if (!player) return null;
-  const seasonId = await getCurrentSeasonId(platform);
-  const ranked = seasonId ? await getPlayerRanked(platform, player.id, seasonId) : {};
-  return { player, squadRanked: ranked.squad ?? ranked["squad-fpp"] };
+  if (!seasonId) return { player, ranked: {}, season: {} };
+  const [ranked, season] = await Promise.all([
+    getPlayerRanked(platform, player.id, seasonId),
+    getPlayerSeason(platform, player.id, seasonId),
+  ]);
+  return { player, ranked, season };
 }
 
 export async function generateMetadata({
@@ -48,9 +61,13 @@ export default async function PlayerProfilePage({ params }: { params: Promise<Pa
   const profile = await loadProfile(platform, playerName);
   if (!profile) notFound();
 
+  // 헤더 티어는 스쿼드 TPP 기준(없으면 스쿼드 1인칭)
+  const squadRanked = profile.ranked.squad ?? profile.ranked["squad-fpp"];
+
   return (
     <Container className="flex flex-col gap-8 py-10">
-      <ProfileHeader player={profile.player} platform={platform} rankedStat={profile.squadRanked} />
+      <ProfileHeader player={profile.player} platform={platform} rankedStat={squadRanked} />
+      <ModeStats ranked={profile.ranked} season={profile.season} />
     </Container>
   );
 }
