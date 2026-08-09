@@ -1,7 +1,7 @@
-import { Shield } from "lucide-react";
+import Avatar from "@/components/ui/Avatar";
+import TierLabel from "@/components/ui/TierLabel";
 import { PLATFORM_LABEL, PLATFORM_ICON, isPlatform } from "@/lib/constants";
 import type { Player, RankedGameModeStats } from "@/types/player";
-import { formatTier } from "@/lib/tier";
 
 interface ProfileHeaderProps {
   player: Player;
@@ -20,9 +20,7 @@ export default function ProfileHeader({ player, platform, rankedStat }: ProfileH
 
   return (
     <div className="flex items-center gap-5 rounded-lg border border-hairline bg-surface p-6 shadow-xs">
-      <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-pill bg-surface-muted text-2xl font-bold text-text-secondary">
-        {name.charAt(0).toUpperCase()}
-      </span>
+      <Avatar alt={name} size="lg" />
       <div className="flex flex-1 flex-col gap-2">
         <h1 className="text-2xl font-bold text-text-primary">{name}</h1>
         <div className="flex flex-wrap items-center gap-2 text-caption text-text-secondary">
@@ -32,8 +30,7 @@ export default function ProfileHeader({ player, platform, rankedStat }: ProfileH
           </span>
           {tier && (
             <span className="inline-flex items-center gap-1.5 font-semibold text-text-primary">
-              <Shield className="h-4 w-4 shrink-0 text-text-tertiary" />
-              {formatTier(tier.tier, tier.subTier)}
+              <TierLabel tier={tier.tier} subTier={tier.subTier} />
               {typeof rp === "number" && (
                 <span className="font-mono text-primary">· {rp.toLocaleString()} RP</span>
               )}
