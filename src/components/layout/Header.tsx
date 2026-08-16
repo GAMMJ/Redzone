@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Container from "@/components/layout/Container";
+import PlayerSearchBox from "@/components/search/PlayerSearchBox";
 
 interface NavItem {
   label: string;
@@ -56,7 +57,7 @@ export default function Header() {
           </nav>
         </div>
 
-        {/* 검색창은 이후 작업(헤더 검색 PR)에서 추가 */}
+        <PlayerSearchBox variant="compact" />
       </Container>
     </header>
   );

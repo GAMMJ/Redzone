@@ -4,51 +4,114 @@ import Avatar from "@/components/ui/Avatar";
 import LinkButton from "@/components/ui/LinkButton";
 import TierLabel from "@/components/ui/TierLabel";
 import { playerPath } from "@/lib/paths";
-import { LIVE_RANKING } from "@/lib/mock/home";
+import { getLeaderboard } from "@/lib/pubg/records";
+import { PLATFORM_LABEL } from "@/lib/constants";
+import type { Platform } from "@/lib/constants";
+import { LEADERBOARD_COL as COL } from "./leaderboardColumns";
 
-// 홈 실시간 랭킹은 스팀 리더보드 고정(플랫폼별은 랭킹 페이지에서 선택)
-const HOME_SHARD = "steam";
+interface LiveRankingProps {
+  // 어느 플랫폼 리더보드인지 (steam·kakao) — 카드마다 다르게 표시
+  platform: Platform;
+  // 현재 시즌(id·번호). 없으면 리더보드 조회 생략. (steam·kakao 모두 PC 시즌 공유)
+  season: { id: string; number: number } | null;
+}
 
-// 메인 "실시간 랭킹" 카드 — 상위 랭커 요약(목업). 행 클릭 시 프로필로 이동.
-export default function LiveRanking() {
+// 플랫폼별 브랜드 아이콘 — public/icons. Steam은 정사각 로고, Kakao는 워드마크 앞 "k" 글자라 폭이 좁음.
+// (콘솔은 홈 랭킹 미노출이라 없음)
+const PLATFORM_ICON: Partial<
+  Record<Platform, { src: string; width: number; height: number }>
+> = {
+  steam: { src: "/icons/steam.svg", width: 20, height: 20 },
+  kakao: { src: "/icons/kakao.svg", width: 11, height: 20 },
+};
+
+// 메인 "실시간 랭킹" 카드 — 플랫폼별 상위 랭커 요약(실 리더보드). 행 클릭 시 프로필로 이동.
+export default async function LiveRanking({
+  platform,
+  season,
+}: LiveRankingProps) {
+  const entries = season
+    ? await getLeaderboard(platform, "squad", season.id)
+    : [];
+  const icon = PLATFORM_ICON[platform];
+
   return (
     <div className="rounded-lg border border-hairline bg-surface shadow-xs">
       <div className="flex items-center justify-between px-6 pt-5 pb-4">
-        <div className="flex items-baseline gap-2.5">
-          <h2 className="text-base font-bold text-text-primary">실시간 랭킹</h2>
-          <span className="text-caption text-text-tertiary">스쿼드 TPP</span>
-        </div>
-        <LinkButton href="/ranking" icon={ArrowRight} className="transition-opacity hover:opacity-80">
+        <h2 className="flex items-center gap-4 text-base font-bold text-text-primary">
+          {icon && (
+            // next/image는 Vercel 무료 최적화 한도로 금지(CLAUDE.md) → 일반 img
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={icon.src}
+              alt=""
+              width={icon.width}
+              height={icon.height}
+              className="shrink-0"
+            />
+          )}
+          {PLATFORM_LABEL[platform]} 실시간 랭킹
+        </h2>
+        <LinkButton
+          href="/ranking"
+          icon={ArrowRight}
+          className="transition-opacity hover:opacity-80"
+        >
           랭킹 보기
         </LinkButton>
       </div>
 
-      <ul>
-        {LIVE_RANKING.map((entry) => (
-          <li key={entry.name} className="border-t border-hairline">
-            <Link
-              href={playerPath(HOME_SHARD, entry.name)}
-              className="flex items-center gap-4 px-6 py-3 transition-colors hover:bg-surface-subtle"
-            >
-              <span className="w-4 shrink-0 text-center font-mono text-sm font-medium text-text-tertiary">
-                {entry.rank}
-              </span>
-              <Avatar alt={entry.name} />
-              <span className="flex-1 truncate text-sm font-semibold text-text-primary">
-                {entry.name}
-              </span>
-              <TierLabel
-                tier={entry.tier}
-                subTier={entry.subTier}
-                className="w-32 text-caption text-text-secondary"
-              />
-              <span className="w-[70px] text-right font-mono text-sm font-bold text-primary">
-                {entry.rankPoints.toLocaleString()}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {entries.length === 0 ? (
+        <p className="border-t border-hairline px-6 py-8 text-center text-caption text-text-tertiary">
+          표시할 랭킹이 없습니다
+        </p>
+      ) : (
+        <>
+          {/* 컬럼 헤더 — 행과 동일한 컬럼 폭 공유 */}
+          <div className="flex items-center border-y border-hairline bg-primary-soft px-6 py-2.5 text-xs font-semibold tracking-[0.3px] text-primary">
+            <span className={COL.rank}>순위</span>
+            <span className="flex-1">닉네임</span>
+            <span className={COL.tier}>티어</span>
+            <span className={COL.rp}>RP</span>
+          </div>
+
+          <ul>
+            {entries.map((entry) => (
+              <li
+                key={entry.name}
+                className="border-b border-hairline last:border-b-0"
+              >
+                <Link
+                  href={playerPath(platform, entry.name)}
+                  className="flex items-center px-6 py-3 transition-colors hover:bg-surface-subtle"
+                >
+                  <span
+                    className={`${COL.rank} font-mono text-sm font-medium text-text-tertiary`}
+                  >
+                    {entry.rank}
+                  </span>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <Avatar alt={entry.name} />
+                    <span className="truncate text-sm font-semibold text-text-primary">
+                      {entry.name}
+                    </span>
+                  </div>
+                  <TierLabel
+                    tier={entry.tier}
+                    subTier={entry.subTier}
+                    className={`${COL.tier} text-caption text-text-secondary`}
+                  />
+                  <span
+                    className={`${COL.rp} font-mono text-sm font-bold text-primary`}
+                  >
+                    {entry.rankPoints.toLocaleString()}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

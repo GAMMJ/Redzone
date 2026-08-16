@@ -11,7 +11,7 @@ export function isPlatform(value: string): value is Platform {
 
 export const PLATFORM_LABEL: Record<Platform, string> = {
   steam: "Steam",
-  kakao: "카카오",
+  kakao: "Kakao",
   console: "콘솔",
 };
 
