@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Search } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Dropdown from "@/components/ui/Dropdown";
+import RecentSearches from "@/components/search/RecentSearches";
 import { PLATFORMS, PLATFORM_LABEL, PLATFORM_ICON } from "@/lib/constants";
 import type { Platform } from "@/lib/constants";
 import { usePlayerSearchBox } from "@/hooks/usePlayerSearchBox";
@@ -10,6 +12,7 @@ import { usePlayerSearchBox } from "@/hooks/usePlayerSearchBox";
 type SearchVariant = "hero" | "compact";
 
 interface VariantStyle {
+  wrapper: string; // relative 래퍼 폭 — 드롭다운이 이 폭을 채운다
   form: string;
   dropdownWidth: string;
   dropdownSize: "sm" | "md";
@@ -25,7 +28,8 @@ interface VariantStyle {
 // hero=메인(큰 테두리+검색버튼), compact=헤더(작은 테두리, 버튼 없음)
 const VARIANT: Record<SearchVariant, VariantStyle> = {
   hero: {
-    form: "h-[66px] w-full max-w-[720px] gap-2 border-2 border-hairline-strong bg-surface p-2 shadow-md has-[input:focus]:border-primary",
+    wrapper: "w-full max-w-[720px]",
+    form: "h-[66px] w-full gap-2 border-2 border-hairline-strong bg-surface p-2 shadow-md has-[input:focus]:border-primary",
     dropdownWidth: "w-[150px]",
     dropdownSize: "md",
     showCheck: true,
@@ -37,7 +41,8 @@ const VARIANT: Record<SearchVariant, VariantStyle> = {
     button: true,
   },
   compact: {
-    form: "w-80 gap-1.5 border border-hairline bg-surface-subtle py-1 pl-1.5 pr-3.5 focus-within:border-primary",
+    wrapper: "w-80",
+    form: "w-full gap-1.5 border border-hairline bg-surface-subtle py-1 pl-1.5 pr-3.5 focus-within:border-primary",
     dropdownWidth: "w-[86px]",
     dropdownSize: "sm",
     showCheck: false,
@@ -52,9 +57,24 @@ const VARIANT: Record<SearchVariant, VariantStyle> = {
 
 // 플레이어 검색창 — 메인(hero)·헤더(compact) 공통 컴포넌트.
 // 상태·제출은 usePlayerSearchBox 훅으로 공유하고, 레이아웃 차이만 variant로 분기.
+// 입력 포커스 시 최근 검색 드롭다운을 띄우고, 외부 클릭·Esc·항목 선택 시 닫는다.
 export default function PlayerSearchBox({ variant }: { variant: SearchVariant }) {
-  const { platform, setPlatform, query, setQuery, handleSubmit } = usePlayerSearchBox();
+  const { platform, setPlatform, query, setQuery, handleSubmit, searchWith } =
+    usePlayerSearchBox();
   const s = VARIANT[variant];
+
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // 검색창 바깥 클릭 시 최근 검색 드롭다운 닫기
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [open]);
 
   const options = PLATFORMS.map((value) => ({
     value,
@@ -63,47 +83,63 @@ export default function PlayerSearchBox({ variant }: { variant: SearchVariant })
   }));
 
   return (
-    <form
-      aria-label="플레이어 검색"
-      onSubmit={(event) => {
-        event.preventDefault();
-        handleSubmit();
-      }}
-      className={`flex items-center rounded-lg transition-colors ${s.form}`}
-    >
-      <div className={`${s.dropdownWidth} shrink-0`}>
-        <Dropdown<Platform>
-          options={options}
-          value={platform}
-          onChange={setPlatform}
-          size={s.dropdownSize}
-          showCheck={s.showCheck}
-        />
-      </div>
+    <div ref={wrapperRef} className={`relative ${s.wrapper}`}>
+      <form
+        aria-label="플레이어 검색"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setOpen(false);
+          handleSubmit();
+        }}
+        className={`flex items-center rounded-lg transition-colors ${s.form}`}
+      >
+        <div className={`${s.dropdownWidth} shrink-0`}>
+          <Dropdown<Platform>
+            options={options}
+            value={platform}
+            onChange={setPlatform}
+            size={s.dropdownSize}
+            showCheck={s.showCheck}
+          />
+        </div>
 
-      <div className={s.inputWrap}>
-        <Search className={`shrink-0 text-text-tertiary ${s.iconClass}`} />
-        <input
-          type="search"
-          aria-label="플레이어 닉네임"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={s.placeholder}
-          className={`w-full min-w-0 bg-transparent text-text-primary outline-none placeholder:text-text-tertiary ${s.inputText}`}
-        />
-      </div>
+        <div className={s.inputWrap}>
+          <Search className={`shrink-0 text-text-tertiary ${s.iconClass}`} />
+          <input
+            type="search"
+            aria-label="플레이어 닉네임"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setOpen(false);
+            }}
+            placeholder={s.placeholder}
+            className={`w-full min-w-0 bg-transparent text-text-primary outline-none placeholder:text-text-tertiary ${s.inputText}`}
+          />
+        </div>
 
-      {s.button && (
-        <Button
-          type="submit"
-          size="lg"
-          icon={ArrowRight}
-          iconPosition="right"
-          className="h-full w-[130px]"
-        >
-          검색
-        </Button>
+        {s.button && (
+          <Button
+            type="submit"
+            size="lg"
+            icon={ArrowRight}
+            iconPosition="right"
+            className="h-full w-[130px]"
+          >
+            검색
+          </Button>
+        )}
+      </form>
+
+      {open && (
+        <RecentSearches
+          onSelect={(name, target) => {
+            setOpen(false);
+            searchWith(name, target);
+          }}
+        />
       )}
-    </form>
+    </div>
   );
 }
