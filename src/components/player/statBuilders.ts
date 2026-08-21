@@ -55,11 +55,10 @@ export function buildRankedStats(ranked: RankedGameModeStats): StatItem[] {
 // 일반전(시즌) 8칸 — 티어/RP·평균순위가 없어 그 대신 헤드샷·최장 킬로 채운다
 export function buildSeasonStats(season: SeasonStats): StatItem[] {
   const rounds = season.roundsPlayed;
-  // 일반전 응답엔 deaths가 없어 losses(비승리 판수 ≈ 사망 수)를 K/D 분모로 대용
-  const kd = season.losses > 0 ? season.kills / season.losses : season.kills;
 
   return [
-    { label: "K/D", value: kd.toFixed(2) },
+    // 일반전 응답엔 deaths가 없어 K/D를 만들 수 없다(losses는 사망 수가 아님) → 최다 킬로 대체
+    { label: "최다 킬", value: season.roundMostKills.toLocaleString() },
     { label: "승률", value: pct(season.wins, rounds) },
     { label: "평균 딜량", value: rounds ? Math.round(season.damageDealt / rounds) : 0 },
     // 일반전 응답엔 헤드샷 비율이 없어 headshotKills/kills로 계산

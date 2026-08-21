@@ -103,8 +103,13 @@ const LEADERBOARD_REGION: Record<string, string> = {
   kakao: "pc-kakao",
 };
 
-// 홈 카드에 표시할 상위 인원 수
-const HOME_LEADERBOARD_LIMIT = 10;
+// getLeaderboard limit 기본값 — 홈 카드는 상위 10명, 랭킹 페이지는 100명 전달.
+const DEFAULT_LEADERBOARD_LIMIT = 10;
+
+// 캐시에는 transform을 거친 LeaderboardEntry[]가 저장되고, 캐시 히트 시엔 검증 없이 캐스팅만 한다.
+// 따라서 LeaderboardEntry의 필드가 바뀌면 옛 모양의 캐시가 TTL 동안 그대로 나가 런타임 에러가 난다.
+// → 엔트리 모양을 바꿀 때마다 이 버전을 올려 캐시를 무효화할 것.
+const LEADERBOARD_SCHEMA_VERSION = "v3";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -116,9 +121,9 @@ function toStr(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-// 리더보드 raw(JSON:API) → 상위 정제 배열. data.relationships.players.data(랭크순)를
+// 리더보드 raw(JSON:API) → 상위 limit개 정제 배열. data.relationships.players.data(랭크순)를
 // included(순서 무보장)에 id로 조인해 rank=순서로 부여한다.
-function toLeaderboardEntries(raw: unknown): LeaderboardEntry[] {
+function toLeaderboardEntries(raw: unknown, limit: number): LeaderboardEntry[] {
   if (!isRecord(raw)) return [];
   const data = isRecord(raw.data) ? raw.data : null;
   const relationships = data && isRecord(data.relationships) ? data.relationships : null;
@@ -145,17 +150,22 @@ function toLeaderboardEntries(raw: unknown): LeaderboardEntry[] {
       tier: toStr(stats.tier),
       subTier: toStr(stats.subTier),
       rankPoints: toNumber(stats.rankPoints),
+      games: toNumber(stats.games),
+      averageDamage: toNumber(stats.averageDamage),
+      averageKill: toNumber(stats.averageKill),
+      winRatio: toNumber(stats.winRatio),
     });
-    if (entries.length >= HOME_LEADERBOARD_LIMIT) break;
+    if (entries.length >= limit) break;
   }
   return entries;
 }
 
-// 현재 시즌 리더보드 상위(정제본). 미지원 플랫폼·조회 실패 시 빈 배열로 degrade.
+// 현재 시즌 리더보드 상위 limit개(정제본). 미지원 플랫폼·조회 실패 시 빈 배열로 degrade.
 export async function getLeaderboard(
   platform: string,
   gameMode: GameMode,
   seasonId: string,
+  limit: number = DEFAULT_LEADERBOARD_LIMIT,
 ): Promise<LeaderboardEntry[]> {
   const region = LEADERBOARD_REGION[platform];
   if (!region) return [];
@@ -166,8 +176,9 @@ export async function getLeaderboard(
       {},
       1800,
       {
-        cacheKey: `leaderboard:${region}:${gameMode}:${seasonId}`,
-        transform: toLeaderboardEntries,
+        // limit별 캐시 분리 — 홈(10건)과 랭킹(100건)이 서로를 덮어쓰지 않게 한다.
+        cacheKey: `leaderboard:${LEADERBOARD_SCHEMA_VERSION}:${region}:${gameMode}:${seasonId}:${limit}`,
+        transform: (raw) => toLeaderboardEntries(raw, limit),
       },
     );
   } catch {

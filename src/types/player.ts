@@ -47,9 +47,11 @@ export interface SeasonStats {
   roundsPlayed: number;
   wins: number;
   top10s: number;
-  // 승리하지 못한 판수 (일반전엔 deaths가 없어 K/D 분모로 대용)
+  // 승리하지 못한 판수 (상단 요약의 "패" 표시용)
   losses: number;
   kills: number;
+  // 한 판 최다 킬 — 일반전엔 deaths가 없어 K/D를 못 만들어서 그 자리에 쓴다
+  roundMostKills: number;
   damageDealt: number;
   headshotKills: number;
   longestKill: number;
