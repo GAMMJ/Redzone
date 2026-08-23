@@ -11,6 +11,10 @@ interface LinkButtonProps {
   children: ReactNode;
 }
 
+// 키보드 포커스 링 — Button.tsx와 동일한 표준을 쓴다. 이동 가능한 <Link>일 때만 의미가 있다.
+const FOCUS_RING =
+  "rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2";
+
 // 텍스트 링크형 버튼 — primary 텍스트 링크 스타일만 갖고, 레이아웃·hover는 className으로 조절.
 export default function LinkButton({
   href,
@@ -22,14 +26,14 @@ export default function LinkButton({
   const cls = `inline-flex items-center gap-1 text-caption font-medium text-primary ${className}`;
   const inner = (
     <>
-      {Icon && iconPosition === "left" && <Icon className="h-3.5 w-3.5 shrink-0" />}
+      {Icon && iconPosition === "left" && <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />}
       {children}
-      {Icon && iconPosition === "right" && <Icon className="h-3.5 w-3.5 shrink-0" />}
+      {Icon && iconPosition === "right" && <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />}
     </>
   );
 
   return href ? (
-    <Link href={href} className={cls}>
+    <Link href={href} className={`${cls} ${FOCUS_RING}`}>
       {inner}
     </Link>
   ) : (
