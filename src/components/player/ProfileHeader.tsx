@@ -1,4 +1,5 @@
 import Avatar from "@/components/ui/Avatar";
+import UpdateButton from "@/components/player/UpdateButton";
 import TierLabel from "@/components/ui/TierLabel";
 import { PLATFORM_LABEL, PLATFORM_ICON, isPlatform } from "@/lib/constants";
 import type { Player, RankedGameModeStats } from "@/types/player";
@@ -38,6 +39,7 @@ export default function ProfileHeader({ player, platform, rankedStat }: ProfileH
           )}
         </div>
       </div>
+      <UpdateButton platform={platform} name={name} />
     </div>
   );
 }
