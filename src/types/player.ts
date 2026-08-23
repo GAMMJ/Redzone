@@ -14,6 +14,12 @@ export interface Player {
     banType: BanType;
     patchVersion: string;
   };
+  // 최근 매치 ID(최신순). PUBG엔 매치 목록 엔드포인트가 따로 없어서
+  // 플레이어 응답의 이 관계가 최근 전적을 얻는 유일한 경로다.
+  // ids로 조회하면 빠지는 경우가 있어 옵셔널로 둔다.
+  relationships?: {
+    matches?: { data?: Array<{ type: "match"; id: string }> };
+  };
 }
 
 export type RankedGameMode = GameMode;
