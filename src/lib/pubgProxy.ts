@@ -7,6 +7,12 @@ const PUBG_API_KEY = process.env.PUBG_API_KEY ?? "";
 const PUBG_BASE_URL = "https://api.pubg.com";
 const CACHE_TTL = 60; // seconds — PUBG 응답 캐시 유지 시간
 
+// ms — 개별 PUBG 호출 상한. 응답 없는 소켓 하나가 호출부를 무한정 붙잡지 못하게 막는 안전장치라
+// 기본값은 넉넉히 잡는다. 짧게 잡으면 평소 느린 시간대에 정상 응답까지 끊겨,
+// 닉네임 조회는 전역 에러로, 시즌 스탯은 "기록 없음"으로 둔갑한다.
+// 여러 건을 병렬로 여는 호출부만 options.timeout으로 더 짧게 조인다.
+const DEFAULT_TIMEOUT = 8000;
+
 // 이 프로젝트가 지원하는 플랫폼 shard
 export const SHARDS = ["steam", "kakao", "console"] as const;
 
@@ -24,6 +30,8 @@ try {
 }
 
 export interface ProxyPubgOptions {
+  // 이 호출에만 적용할 타임아웃(ms). 기본 DEFAULT_TIMEOUT.
+  timeout?: number;
   // 기본 `pubg:{shard}:{path}:{params}` 대신 이 키로 캐시 (프리페치와 키 스킴 통일용)
   cacheKey?: string;
   // 캐시 저장·응답 전에 raw를 이 함수로 변환 (리더보드 정제 등)
@@ -58,8 +66,10 @@ async function fetchAndStore(
   ttl: number,
   cacheKey: string,
   transform?: (raw: unknown) => unknown,
+  timeout: number = DEFAULT_TIMEOUT,
 ): Promise<unknown> {
   const response = await axios.get<unknown>(`${PUBG_BASE_URL}/shards/${shard}/${path}`, {
+    timeout,
     headers: {
       Authorization: `Bearer ${PUBG_API_KEY}`,
       Accept: "application/vnd.api+json",
@@ -83,12 +93,12 @@ export async function fetchPubgCached<T = unknown>(
   path: string,
   params: Record<string, string> = {},
   ttl: number = CACHE_TTL,
-  { cacheKey: cacheKeyOverride, transform }: ProxyPubgOptions = {},
+  { cacheKey: cacheKeyOverride, transform, timeout }: ProxyPubgOptions = {},
 ): Promise<T> {
   const cacheKey = buildCacheKey(shard, path, params, cacheKeyOverride);
   const cached = await readCache(cacheKey);
   if (cached !== null) return cached as T;
-  return (await fetchAndStore(shard, path, params, ttl, cacheKey, transform)) as T;
+  return (await fetchAndStore(shard, path, params, ttl, cacheKey, transform, timeout)) as T;
 }
 
 // 허용된 PUBG 하위 경로(path)만 프록시. 캐시 우선 조회 후 Response 반환.
@@ -98,7 +108,7 @@ export async function proxyPubg(
   path: string,
   params: Record<string, string> = {},
   ttl: number = CACHE_TTL,
-  { cacheKey: cacheKeyOverride, transform }: ProxyPubgOptions = {},
+  { cacheKey: cacheKeyOverride, transform, timeout }: ProxyPubgOptions = {},
 ): Promise<Response> {
   const cacheKey = buildCacheKey(shard, path, params, cacheKeyOverride);
 
@@ -109,7 +119,7 @@ export async function proxyPubg(
   }
 
   try {
-    const payload = await fetchAndStore(shard, path, params, ttl, cacheKey, transform);
+    const payload = await fetchAndStore(shard, path, params, ttl, cacheKey, transform, timeout);
     return Response.json(payload, {
       headers: {
         "Cache-Control": `s-maxage=${ttl}, stale-while-revalidate`,
