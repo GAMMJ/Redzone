@@ -1,10 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { UISize } from "./types";
 
 type ButtonVariant = "primary" | "secondary" | "link";
 
-interface ButtonProps {
+// 네이티브 button 속성을 그대로 받는다. 확장하지 않으면 aria-expanded 같은 하이픈 속성이
+// props 객체에 담긴 채 조용히 버려진다 — TS는 하이픈 속성을 초과 프로퍼티 검사에서 제외해 못 잡는다.
+interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type" | "onClick"> {
   variant?: ButtonVariant;
   size?: UISize;
   type?: "button" | "submit";
@@ -35,6 +37,7 @@ export default function Button({
   ariaLabel,
   className = "",
   children,
+  ...rest
 }: ButtonProps) {
   // link는 배경 없는 텍스트 링크라 SIZE 박스 패딩을 타지 않고 고정 스타일 사용
   const isLink = variant === "link";
@@ -63,6 +66,7 @@ export default function Button({
       disabled={disabled}
       onClick={onClick}
       aria-label={ariaLabel}
+      {...rest}
       className={`${base} ${boxClass} ${variantClass} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ${className}`}
     >
       {Icon && iconPosition === "left" && <Icon className={iconClass} />}
