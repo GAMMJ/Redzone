@@ -11,6 +11,13 @@ import type {
   SeasonStats,
 } from "@/types/player";
 import type { LeaderboardEntry } from "@/types/leaderboard";
+import type { MatchSummary } from "@/types/match";
+import { isValidMatchId } from "@/lib/pubg/matchId";
+import {
+  MATCH_BATCH_TIMEOUT,
+  MATCH_CACHE_TTL,
+  MAX_SUMMARY_IDS,
+} from "@/lib/pubg/matchConstants";
 
 interface SeasonsResponse {
   data?: Array<{ id: string; attributes: { isCurrentSeason: boolean } }>;
@@ -60,12 +67,14 @@ export async function getCurrentSeason(
   return { id, number: parseSeasonNumber(id) };
 }
 
-// 플레이어 랭크 스탯(모드별) — 플레이한 모드만 키로 존재
+// 플레이어 랭크 스탯(모드별) — 플레이한 모드만 키로 존재.
+// seasonId가 null(시즌 조회 실패)이면 호출부가 분기하지 않도록 여기서 빈 값으로 degrade한다.
 export async function getPlayerRanked(
   shard: string,
   playerId: string,
-  seasonId: string,
+  seasonId: string | null,
 ): Promise<Partial<Record<RankedGameMode, RankedGameModeStats>>> {
+  if (!seasonId) return {};
   try {
     const res = await fetchPubgCached<PlayerRankedResponse>(
       shard,
@@ -78,12 +87,14 @@ export async function getPlayerRanked(
   }
 }
 
-// 플레이어 일반전 시즌 스탯(모드별) — 안 한 모드도 0값으로 내려올 수 있음
+// 플레이어 일반전 시즌 스탯(모드별) — 안 한 모드도 0값으로 내려올 수 있음.
+// seasonId가 null이면 랭크 쪽과 같은 이유로 빈 값으로 degrade한다.
 export async function getPlayerSeason(
   shard: string,
   playerId: string,
-  seasonId: string,
+  seasonId: string | null,
 ): Promise<Partial<Record<GameMode, SeasonStats>>> {
+  if (!seasonId) return {};
   try {
     const res = await fetchPubgCached<PlayerSeasonResponse>(
       shard,
@@ -185,4 +196,98 @@ export async function getLeaderboard(
     // 리더보드 조회 실패(429·네트워크 등)는 빈 목록으로 degrade
     return [];
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 매치 (최근 전적)
+// ─────────────────────────────────────────────────────────────
+
+// 플레이어 응답에 실려 온 최근 매치 ID(최신순). PUBG엔 매치 목록 엔드포인트가 없다.
+export function getPlayerMatchIds(player: Player): string[] {
+  const refs = player.relationships?.matches?.data;
+  if (!Array.isArray(refs)) return [];
+  return refs.map((ref) => ref.id).filter((id): id is string => typeof id === "string");
+}
+
+// 매치 원본(JSON:API) → 특정 플레이어 기준 요약. 형태가 어긋나면 null.
+// 참가자와 로스터가 included 한 배열에 섞여 오므로 type으로 갈라 처리한다.
+function toMatchSummary(raw: unknown, playerId: string): MatchSummary | null {
+  if (!isRecord(raw)) return null;
+  const data = isRecord(raw.data) ? raw.data : null;
+  if (!data || typeof data.id !== "string") return null;
+  const attributes = isRecord(data.attributes) ? data.attributes : null;
+  if (!attributes) return null;
+
+  const included = Array.isArray(raw.included) ? raw.included : [];
+  let totalTeams = 0;
+  let stats: MatchSummary["stats"] = null;
+
+  for (const item of included) {
+    if (!isRecord(item)) continue;
+
+    // 로스터 하나 = 팀 하나. 등수 분모로 쓴다.
+    if (item.type === "roster") {
+      totalTeams += 1;
+      continue;
+    }
+    if (item.type !== "participant" || stats) continue;
+
+    const itemAttributes = isRecord(item.attributes) ? item.attributes : null;
+    const participantStats =
+      itemAttributes && isRecord(itemAttributes.stats) ? itemAttributes.stats : null;
+    // 조회 대상 플레이어의 기록일 때만 채택
+    if (!participantStats || participantStats.playerId !== playerId) continue;
+
+    stats = {
+      winPlace: toNumber(participantStats.winPlace),
+      kills: toNumber(participantStats.kills),
+      assists: toNumber(participantStats.assists),
+      damageDealt: toNumber(participantStats.damageDealt),
+      headshotKills: toNumber(participantStats.headshotKills),
+      timeSurvived: toNumber(participantStats.timeSurvived),
+    };
+  }
+
+  return {
+    id: data.id,
+    matchType: toStr(attributes.matchType),
+    gameMode: toStr(attributes.gameMode),
+    mapName: toStr(attributes.mapName),
+    createdAt: toStr(attributes.createdAt),
+    isCustomMatch: attributes.isCustomMatch === true,
+    totalTeams,
+    stats,
+  };
+}
+
+// 매치 여러 건을 캐시 우선으로 모아 요약으로 투영한다.
+// 개별 실패(429 등)는 건너뛴다 — 한 건 때문에 목록 전체가 비는 것보다 낫고,
+// 성공한 건은 캐시에 남아 다음 방문에 회복된다.
+export async function getMatchSummaries(
+  shard: string,
+  playerId: string,
+  matchIds: string[],
+): Promise<MatchSummary[]> {
+  // 형식이 어긋난 id는 PUBG 경로에 넣기 전에 떨군다
+  const targets = matchIds.filter(isValidMatchId).slice(0, MAX_SUMMARY_IDS);
+  if (targets.length === 0) return [];
+
+  const settled = await Promise.allSettled(
+    targets.map((id) =>
+      fetchPubgCached<unknown>(shard, `matches/${id}`, {}, MATCH_CACHE_TTL, {
+        timeout: MATCH_BATCH_TIMEOUT,
+      }),
+    ),
+  );
+
+  // allSettled는 입력 순서를 지키므로 최신순이 그대로 유지된다.
+  // stats가 없는 요약(대상 플레이어가 그 매치 참가자에 없음)은 카드로 그릴 수 없어 여기서 뗀다.
+  // 남겨두면 화면 단에서 조용히 사라져 "몇 건이 빠졌는지" 셈이 어긋난다.
+  //
+  // 결과가 요청보다 짧아지는 경로는 넷이다 — 조회 실패(429·네트워크·타임아웃), stats 없음,
+  // toMatchSummary 형태 불일치, isValidMatchId 탈락. 화면에는 모두 "불러오지 못했습니다"로 수렴한다.
+  return settled
+    .filter((result): result is PromiseFulfilledResult<unknown> => result.status === "fulfilled")
+    .map((result) => toMatchSummary(result.value, playerId))
+    .filter((summary): summary is MatchSummary => summary !== null && summary.stats !== null);
 }
