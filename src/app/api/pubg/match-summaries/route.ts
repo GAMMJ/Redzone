@@ -2,7 +2,7 @@
 // 목록이 매치 상세 N개를 각각 받아 무거워지지 않도록, 서버가 캐시 우선으로 모아
 // 플레이어 기준으로 투영한 요약만 내려보낸다.
 import { getMatchSummaries } from "@/lib/pubg/records";
-import { MATCH_CACHE_TTL, MAX_SUMMARY_IDS } from "@/lib/pubg/matchConstants";
+import { MATCH_SUMMARY_TTL, MAX_SUMMARY_IDS } from "@/lib/pubg/matchConstants";
 import { isValidShard } from "@/lib/pubgProxy";
 
 export async function GET(request: Request) {
@@ -32,6 +32,6 @@ export async function GET(request: Request) {
 
   return Response.json(
     { data },
-    { headers: { "Cache-Control": `s-maxage=${MATCH_CACHE_TTL}, stale-while-revalidate` } },
+    { headers: { "Cache-Control": `s-maxage=${MATCH_SUMMARY_TTL}, stale-while-revalidate` } },
   );
 }
