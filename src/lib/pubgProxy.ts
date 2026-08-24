@@ -13,6 +13,10 @@ const CACHE_TTL = 60; // seconds — PUBG 응답 캐시 유지 시간
 // 여러 건을 병렬로 여는 호출부만 options.timeout으로 더 짧게 조인다.
 const DEFAULT_TIMEOUT = 8000;
 
+// 남은 호출 수가 이 값 이하로 떨어지면 로그에 남긴다.
+// 한도는 분당 10회이고 프로필 1회가 4회를 쓰므로, 3 이하면 다음 조회가 막힐 수 있다는 뜻이다.
+const RATE_LIMIT_WARN_AT = 3;
+
 // 이 프로젝트가 지원하는 플랫폼 shard
 export const SHARDS = ["steam", "kakao", "console"] as const;
 
@@ -48,6 +52,26 @@ function buildCacheKey(
   return override ?? `pubg:${shard}:${path}:${new URLSearchParams(params).toString()}`;
 }
 
+// 한도에 얼마나 근접했는지 남긴다.
+// matches 는 rate limit 대상이 아니라 헤더가 아예 없다 — 그때는 조용히 넘어간다.
+// 평소에는 찍지 않고 임계 이하일 때만 남겨 로그가 묻히지 않게 한다.
+function logRateLimit(shard: string, path: string, headers: unknown): void {
+  const raw = (headers as Record<string, unknown> | undefined)?.["x-ratelimit-remaining"];
+  const remaining = Number(raw);
+  if (!Number.isFinite(remaining) || remaining > RATE_LIMIT_WARN_AT) return;
+  console.warn(`[pubg] 호출 한도 임박 — 남은 ${remaining}회 (${shard}/${path})`);
+}
+
+// PUBG는 429에 Retry-After를 주지 않는다. 대신 x-ratelimit-reset(유닉스 초)으로
+// 창이 언제 열리는지 알려준다. 이 값을 Retry-After 초로 환산해 클라이언트가 쓸 수 있게 한다.
+// 환산하지 않으면 클라이언트는 헤더가 없다고 보고 눈감고 지수 백오프를 돈다.
+function secondsUntilReset(headers: unknown): number | null {
+  const reset = Number((headers as Record<string, unknown> | undefined)?.["x-ratelimit-reset"]);
+  if (!Number.isFinite(reset)) return null;
+  const seconds = Math.ceil(reset - Date.now() / 1000);
+  return seconds > 0 ? seconds : null;
+}
+
 // 캐시 조회 — 히트면 값, 미스/미설정/실패면 null (실패해도 PUBG 호출로 계속)
 async function readCache(cacheKey: string): Promise<unknown> {
   if (!redis) return null;
@@ -76,6 +100,8 @@ async function fetchAndStore(
     },
     params,
   });
+  logRateLimit(shard, path, response.headers);
+
   const payload = transform ? transform(response.data) : response.data;
   if (redis) {
     try {
@@ -131,8 +157,13 @@ export async function proxyPubg(
       const status = err.response?.status ?? 500;
       const headers: Record<string, string> = {};
       // PUBG가 429(rate limit) 응답 시 Retry-After를 그대로 클라이언트에 전달
-      const retryAfter = err.response?.headers?.["retry-after"];
-      if (status === 429 && retryAfter) headers["Retry-After"] = String(retryAfter);
+      if (status === 429) {
+        // PUBG가 Retry-After를 주면 그대로, 아니면 reset 시각에서 환산한다.
+        const retryAfter =
+          err.response?.headers?.["retry-after"] ?? secondsUntilReset(err.response?.headers);
+        console.warn(`[pubg] 429 한도 초과 (${shard}/${path}) — ${retryAfter ?? "?"}초 후 재시도 가능`);
+        if (retryAfter) headers["Retry-After"] = String(retryAfter);
+      }
       return Response.json({ error: err.response?.data ?? err.message }, { status, headers });
     }
     return Response.json({ error: "서버 내부 오류가 발생했습니다" }, { status: 500 });
