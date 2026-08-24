@@ -91,7 +91,10 @@ function PlayerRow({ member, rank }: { member: MatchTeamMember; rank: number }) 
         isTarget ? "bg-primary-soft" : "bg-surface"
       }`}
     >
-      <span className="w-4 shrink-0 text-center text-xs font-medium text-text-tertiary">{rank}</span>
+      <span className="w-4 shrink-0 text-center text-xs font-medium text-text-tertiary">
+        <span className="sr-only">팀 내 </span>
+        {rank}
+      </span>
       <Avatar alt={name} size="sm" />
       <span className="flex min-w-[110px] flex-1 items-center gap-1.5 truncate">
         <span
@@ -110,6 +113,10 @@ function PlayerRow({ member, rank }: { member: MatchTeamMember; rank: number }) 
             c.strong ? "font-bold text-text-primary" : "text-text-secondary"
           }`}
         >
+          {/* 수치만 있으면 스크린리더에 "3 0 412 1 …"로 읽힌다.
+              어떤 지표인지 숨김 텍스트로 붙여 "킬 3"으로 읽히게 한다.
+              generic span의 aria-label은 무시될 수 있어 실제 텍스트를 넣는다. */}
+          <span className="sr-only">{c.label} </span>
           {c.get(member)}
         </span>
       ))}
@@ -181,7 +188,14 @@ const LEGEND = [
 // 참가자 표 래퍼 — 세로로 길면 표 안에서 스크롤(max-h) + 헤더 sticky 고정. 컬럼이 많아 가로로도 스크롤한다.
 function RankTable({ children }: { children: ReactNode }) {
   return (
-    <div className="max-h-[560px] overflow-auto rounded-lg border border-hairline">
+    // 스크롤되는 영역은 초점을 받을 수 있어야 키보드로 움직일 수 있다.
+    // region + 이름이 있어야 스크린리더가 "참가자 기록 영역"으로 안내한다.
+    <div
+      role="region"
+      aria-label="참가자 기록"
+      tabIndex={0}
+      className="max-h-[560px] overflow-auto rounded-lg border border-hairline"
+    >
       <div className="min-w-[900px]">
         <ColumnHeader />
         {children}
@@ -267,6 +281,9 @@ export default function MatchDetail({ match, playerId, stats }: MatchDetailProps
           <button
             key={t.value}
             type="button"
+            // role="tab"을 쓰면 화살표 키 이동까지 갖춰야 한다(APG). 여기선 버튼 두 개뿐이라
+            // 토글 버튼 패턴(aria-pressed)으로 선택 상태만 정확히 전달한다.
+            aria-pressed={tab === t.value}
             onClick={() => setTab(t.value)}
             className={`flex-1 rounded-sm py-2 text-sm font-semibold transition-colors ${
               tab === t.value
@@ -296,7 +313,7 @@ export default function MatchDetail({ match, playerId, stats }: MatchDetailProps
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {LEGEND.map((item) => (
                 <span key={item.label} className="flex items-center gap-1.5">
-                  <span className={`h-2.5 w-2.5 rounded-pill ${item.dot}`} />
+                  <span aria-hidden className={`h-2.5 w-2.5 rounded-pill ${item.dot}`} />
                   <span className="text-[11px] text-text-tertiary">{item.label}</span>
                 </span>
               ))}
