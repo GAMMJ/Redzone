@@ -1,7 +1,7 @@
 // 매치 단건 프록시 — GET /api/pubg/matches?shard=&id=
 // 목록 요약(match-summaries)과 같은 캐시 키를 쓰므로, 목록을 그린 뒤 카드를 펼치면 캐시 히트다.
 import { proxyPubg, isValidShard } from "@/lib/pubgProxy";
-import { MATCH_CACHE_TTL } from "@/lib/pubg/matchConstants";
+import { MATCH_DETAIL_TTL } from "@/lib/pubg/matchConstants";
 import { isValidMatchId } from "@/lib/pubg/matchId";
 
 export async function GET(request: Request) {
@@ -18,5 +18,5 @@ export async function GET(request: Request) {
   }
 
   // 실제 PUBG 경로: /shards/{shard}/matches/{matchId}
-  return proxyPubg(shard, `matches/${id}`, {}, MATCH_CACHE_TTL);
+  return proxyPubg(shard, `matches/${id}`, {}, MATCH_DETAIL_TTL);
 }

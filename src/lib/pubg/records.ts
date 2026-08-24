@@ -15,7 +15,8 @@ import type { MatchSummary } from "@/types/match";
 import { isValidMatchId } from "@/lib/pubg/matchId";
 import {
   MATCH_BATCH_TIMEOUT,
-  MATCH_CACHE_TTL,
+  MATCH_SUMMARY_SCHEMA_VERSION,
+  MATCH_SUMMARY_TTL,
   MAX_SUMMARY_IDS,
 } from "@/lib/pubg/matchConstants";
 
@@ -272,9 +273,16 @@ export async function getMatchSummaries(
   const targets = matchIds.filter(isValidMatchId).slice(0, MAX_SUMMARY_IDS);
   if (targets.length === 0) return [];
 
+  // 원본(약 63KB)이 아니라 투영한 요약(약 200바이트)을 캐시한다.
+  // 원본을 캐시하면 목록 한 페이지를 그릴 때마다 630KB를 읽어와 2KB로 줄이는 셈이 된다.
+  //
+  // 요약은 플레이어 기준 투영이라 캐시 키에 playerId가 들어간다.
+  // 같은 매치라도 사람마다 다른 요약이 나오므로 키를 공유할 수 없다.
   const settled = await Promise.allSettled(
     targets.map((id) =>
-      fetchPubgCached<unknown>(shard, `matches/${id}`, {}, MATCH_CACHE_TTL, {
+      fetchPubgCached<MatchSummary | null>(shard, `matches/${id}`, {}, MATCH_SUMMARY_TTL, {
+        cacheKey: `match:sum:${MATCH_SUMMARY_SCHEMA_VERSION}:${shard}:${playerId}:${id}`,
+        transform: (raw) => toMatchSummary(raw, playerId),
         timeout: MATCH_BATCH_TIMEOUT,
       }),
     ),
@@ -284,10 +292,13 @@ export async function getMatchSummaries(
   // stats가 없는 요약(대상 플레이어가 그 매치 참가자에 없음)은 카드로 그릴 수 없어 여기서 뗀다.
   // 남겨두면 화면 단에서 조용히 사라져 "몇 건이 빠졌는지" 셈이 어긋난다.
   //
-  // 결과가 요청보다 짧아지는 경로는 넷이다 — 조회 실패(429·네트워크·타임아웃), stats 없음,
+  // 결과가 요청보다 짧아지는 경로는 넷이다 — 조회 실패(네트워크·타임아웃), stats 없음,
   // toMatchSummary 형태 불일치, isValidMatchId 탈락. 화면에는 모두 "불러오지 못했습니다"로 수렴한다.
+  //
+  // transform이 null을 내면 캐시에 남지 않아 다음에도 다시 부른다.
+  // 형태가 깨진 매치에 한정되고 매치 호출은 한도를 안 쓰므로 그대로 둔다.
   return settled
-    .filter((result): result is PromiseFulfilledResult<unknown> => result.status === "fulfilled")
-    .map((result) => toMatchSummary(result.value, playerId))
+    .filter((result): result is PromiseFulfilledResult<MatchSummary | null> => result.status === "fulfilled")
+    .map((result) => result.value)
     .filter((summary): summary is MatchSummary => summary !== null && summary.stats !== null);
 }

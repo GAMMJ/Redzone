@@ -7,10 +7,18 @@
 // 페이지당 PUBG 호출 수이기도 해서 늘리면 첫 방문 429 위험이 커진다.
 export const RECENT_MATCHES_PAGE_SIZE = 10;
 
-// 종료된 매치는 다시 바뀌지 않는다 → 30일 캐시.
-// 목록 요약과 상세가 같은 캐시 키(`pubg:{shard}:matches/{id}:`)를 쓰므로,
-// 목록을 한 번 그리면 카드를 펼칠 때는 PUBG를 다시 호출하지 않는다.
-export const MATCH_CACHE_TTL = 60 * 60 * 24 * 30;
+// 목록 카드용 요약 캐시(약 200바이트). 종료된 매치는 불변이라 길게 잡는다.
+export const MATCH_SUMMARY_TTL = 60 * 60 * 24 * 30;
+
+// 상세용 원본 캐시(약 63KB). 카드를 펼쳐 보는 동안만 필요하므로 짧게 잡는다.
+// PUBG 문서상 /matches 는 rate limit 대상이 아니라, 만료 후 다시 불러도 한도를 쓰지 않는다.
+// (실측으로도 확인: 매치 호출은 X-Ratelimit-Remaining 을 줄이지 않는다)
+export const MATCH_DETAIL_TTL = 60 * 60;
+
+// 요약 캐시 스키마 버전.
+// transform 결과를 그대로 저장하므로 MatchSummary 필드를 바꾸면
+// 옛 모양이 TTL 내내 그대로 나간다. 모양을 바꿀 때마다 이 값을 올려 캐시를 무효화할 것.
+export const MATCH_SUMMARY_SCHEMA_VERSION = "v1";
 
 // 배치 요약은 매치를 한꺼번에 여러 건 연다. 한 건이 매달리면 나머지가 다 와도 끝나지 않으므로
 // 기본값보다 짧게 조여 느린 건만 버리고 나머지로 화면을 그린다.
