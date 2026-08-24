@@ -288,6 +288,13 @@ export async function getMatchSummaries(
     ),
   );
 
+  // 실패는 화면에서 "N건을 불러오지 못했습니다"로 사용자에게 보이지만 서버 로그에는 안 남는다.
+  // 원인(타임아웃·네트워크·형태 불일치)을 나중에 추적하려면 여기서 한 줄 남겨야 한다.
+  const rejected = settled.filter((result) => result.status === "rejected").length;
+  if (rejected > 0) {
+    console.warn(`[pubg] 매치 요약 ${rejected}/${targets.length}건 조회 실패 (${shard} ${playerId})`);
+  }
+
   // allSettled는 입력 순서를 지키므로 최신순이 그대로 유지된다.
   // stats가 없는 요약(대상 플레이어가 그 매치 참가자에 없음)은 카드로 그릴 수 없어 여기서 뗀다.
   // 남겨두면 화면 단에서 조용히 사라져 "몇 건이 빠졌는지" 셈이 어긋난다.
