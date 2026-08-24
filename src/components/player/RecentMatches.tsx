@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Spinner from "@/components/ui/Spinner";
 import Pagination from "@/components/ui/Pagination";
 import MatchCard from "@/components/match/MatchCard";
@@ -16,6 +17,17 @@ import {
 } from "@/lib/pubg/matchLabels";
 import { findPlayerStats } from "@/lib/pubg/matchTeams";
 import type { MatchSummary } from "@/types/match";
+
+// 페이지 번호를 실을 쿼리 이름
+const PAGE_PARAM = "page";
+
+// 쿼리에서 읽은 페이지 번호를 쓸 수 있는 범위로 정리한다.
+// 0·음수·소수·문자·범위 초과는 모두 1페이지로 본다.
+function readPage(raw: string | null, totalPages: number): number {
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) return 1;
+  return Math.min(parsed, Math.max(1, totalPages));
+}
 
 // 상세는 카드를 펼쳤을 때만 마운트된다 — 그때 매치 단건을 조회한다.
 function MatchDetailLoader({
@@ -104,10 +116,13 @@ export default function RecentMatches({
   matchIds,
   initialSummaries,
 }: RecentMatchesProps) {
-  const [page, setPage] = useState(1);
   const sectionRef = useRef<HTMLElement>(null);
-
   const totalPages = Math.ceil(matchIds.length / PER_PAGE);
+
+  // 시작 페이지는 URL에서 읽는다 — 새로고침해도 유지되고 주소 공유가 된다.
+  // 이후 이동은 상태로 관리하고 URL은 뒤따라 맞춘다(handlePage 주석 참고).
+  const searchParams = useSearchParams();
+  const [page, setPage] = useState(() => readPage(searchParams.get(PAGE_PARAM), totalPages));
   const pageIds = matchIds.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   // 현재 페이지 매치의 경량 요약만 한 요청으로 조회
@@ -147,6 +162,16 @@ export default function RecentMatches({
 
   function handlePage(next: number) {
     setPage(next);
+
+    // router.replace를 쓰면 쿼리 변경이 서버 왕복을 일으켜 프로필 SSR이 통째로 다시 돈다.
+    // PUBG 한도가 분당 10회인데 프로필 1회가 4회를 쓰므로 페이지마다 그 비용을 낼 수 없다.
+    // history API로 주소만 바꾸면 렌더 없이 새로고침·공유만 얻는다.
+    const params = new URLSearchParams(searchParams);
+    if (next <= 1) params.delete(PAGE_PARAM);
+    else params.set(PAGE_PARAM, String(next));
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+
     // 페이지 이동 시 "최근 매치" 제목이 상단에 오도록 스크롤
     sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
