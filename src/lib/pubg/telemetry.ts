@@ -28,6 +28,28 @@ const DEATH_CAUSE: Record<string, string> = {
   Damage_Blizzard: "눈보라",
 };
 
+// 공식 사전 위에 덮어쓰는 이름.
+//
+// 총기는 한국 유저도 영문으로 부르므로(ACE32·Kar98k·Beryl) 사전 값을 그대로 쓴다.
+// 사전이 코드명보다 정확한 경우도 많다 — WeapAK47_C는 실제 게임에서 AKM이고 사전이 그렇게 준다.
+//
+// 반면 투척류는 한국어로 부른다. 사망 원인을 "자기장"·"낙사"로 적는 것과 결이 같다.
+// 사전 파일(damageCauserName.ts)은 공식 데이터 사본이라 손대지 않고 여기서만 갈아끼운다.
+const NAME_OVERRIDE: Record<string, string> = {
+  ProjGrenade_C: "수류탄",
+  ProjStickyGrenade_C: "점착 폭탄",
+
+  // 화염병 한 발은 코드 셋을 남긴다 — 병 직격, 바닥 불길, 옮겨 붙은 화상.
+  // 실측하면 직격은 드물고(1건) 대부분 불길과 화상으로 깎인다.
+  // 사용자에게는 "화염병에 죽었다"가 전부라 셋을 하나로 뭉친다. 소이탄도 같은 이유로 묶는다.
+  ProjMolotov_C: "화염병",
+  ProjMolotov_DamageField_Direct_C: "화염병",
+  BP_FireEffectController_C: "화염병",
+  BP_MolotovFireDebuff_C: "화염병",
+  ProjIncendiary_C: "소이탄",
+  BP_IncendiaryDebuff_C: "소이탄",
+};
+
 // 공식 사전은 2024-10 이후 갱신되지 않아 최신 무기가 빠져 있다(RPD 등).
 // 코드에서 접두·접미를 걷어내면 대체로 읽을 만한 이름이 된다. WeapRPD_C → RPD
 function humanizeCode(code: string): string {
@@ -44,7 +66,7 @@ function humanizeCode(code: string): string {
 
 export function weaponName(code: string | undefined | null): string {
   if (!code) return "";
-  return DAMAGE_CAUSER_NAME[code] ?? humanizeCode(code);
+  return NAME_OVERRIDE[code] ?? DAMAGE_CAUSER_NAME[code] ?? humanizeCode(code);
 }
 
 // 무기든 환경이든 "무엇에 죽었나"를 한 문자열로. 피해 종류가 자기장·낙사면 그쪽을 우선한다.
@@ -154,6 +176,7 @@ export function summarizeTelemetry(raw: unknown): MatchTelemetry | null {
           victim,
           weapon: weaponName(toStr(event.damageCauserName)),
           distanceM: Math.round(toNumber(event.distance) / 100),
+          bodyPart: toStr(event.damageReason),
         });
         break;
       }
