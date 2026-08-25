@@ -30,6 +30,8 @@ export interface TelemetryGroggy {
   victim: string;
   weapon: string;
   distanceM: number;
+  /** 킬과 마찬가지로 부위가 기록된다. 없으면 빈 문자열 */
+  bodyPart: string;
 }
 
 export interface TelemetryRevive {

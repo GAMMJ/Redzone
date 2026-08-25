@@ -6,6 +6,7 @@ import { Trophy } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import { formatMapName, formatSurvival, gameModeFullLabel } from "@/lib/pubg/matchLabels";
 import { mainWeaponOf } from "@/lib/pubg/telemetry";
+import MatchLog from "@/components/player/MatchLog";
 import { toMatchTeams } from "@/lib/pubg/matchTeams";
 import type { MatchTeam, MatchTeamMember } from "@/lib/pubg/matchTeams";
 import type { MatchResponse, ParticipantStats } from "@/types/match";
@@ -19,7 +20,7 @@ interface MatchDetailProps {
   telemetry?: MatchTelemetry;
 }
 
-type DetailTab = "team" | "all";
+type DetailTab = "team" | "all" | "log";
 
 // 상단 요약 — 매치 API stats에 텔레메트리에서만 나오는 둘(주무기·받은 피해)을 더한다.
 // 텔레메트리가 없으면 그 두 칸만 "—"로 두고 나머지는 그대로 그린다.
@@ -254,6 +255,7 @@ function TeamRecord({ team }: { team: MatchTeam }) {
 const TABS: { value: DetailTab; label: string }[] = [
   { value: "team", label: "팀 전적" },
   { value: "all", label: "전체 순위" },
+  { value: "log", label: "로그" },
 ];
 
 export default function MatchDetail({ match, playerId, stats, telemetry }: MatchDetailProps) {
@@ -268,6 +270,62 @@ export default function MatchDetail({ match, playerId, stats, telemetry }: Match
   const totalPlayers = teams.reduce((sum, t) => sum + t.members.length, 0);
   const myTeam = teams.find((t) => t.members.some((m) => m.isTarget));
   const myTeamId = myTeam?.teamId;
+
+  // 탭이 셋이 되면서 중첩 삼항이 깊어져 평평하게 폈다.
+  // 동시에 렌더되지 않는 화면들이라 한 덩어리로 묶여 있을 이유가 없다.
+  function renderTab() {
+    if (tab === "team") {
+      if (!myTeam) {
+        return (
+          <p className="py-8 text-center text-caption text-text-tertiary">
+            우리 팀 정보를 찾을 수 없습니다
+          </p>
+        );
+      }
+      return <TeamRecord team={myTeam} />;
+    }
+
+    if (tab === "log") {
+      // 텔레메트리는 매치 상세와 따로 오므로 아직 없거나 실패했을 수 있다.
+      if (!telemetry) {
+        return (
+          <p className="py-8 text-center text-caption text-text-tertiary">
+            로그를 불러오는 중입니다
+          </p>
+        );
+      }
+      return (
+        <MatchLog
+          telemetry={telemetry}
+          playerName={stats.name}
+          teamNames={myTeam?.members.map((m) => m.name) ?? []}
+        />
+      );
+    }
+
+    return (
+      <div>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-caption font-medium text-text-tertiary">
+            총 {totalTeams}팀 · {totalPlayers}명 참가
+          </span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {LEGEND.map((item) => (
+              <span key={item.label} className="flex items-center gap-1.5">
+                <span aria-hidden className={`h-2.5 w-2.5 rounded-pill ${item.dot}`} />
+                <span className="text-[11px] text-text-tertiary">{item.label}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <RankTable>
+          {teams.map((team) => (
+            <TeamGroup key={team.teamId} team={team} isMyTeam={team.teamId === myTeamId} />
+          ))}
+        </RankTable>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-hairline bg-surface p-6 shadow-sm">
@@ -318,36 +376,7 @@ export default function MatchDetail({ match, playerId, stats, telemetry }: Match
         ))}
       </div>
 
-      {tab === "team" ? (
-        myTeam ? (
-          <TeamRecord team={myTeam} />
-        ) : (
-          <p className="py-8 text-center text-caption text-text-tertiary">
-            우리 팀 정보를 찾을 수 없습니다
-          </p>
-        )
-      ) : (
-        <div>
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-caption font-medium text-text-tertiary">
-              총 {totalTeams}팀 · {totalPlayers}명 참가
-            </span>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {LEGEND.map((item) => (
-                <span key={item.label} className="flex items-center gap-1.5">
-                  <span aria-hidden className={`h-2.5 w-2.5 rounded-pill ${item.dot}`} />
-                  <span className="text-[11px] text-text-tertiary">{item.label}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-          <RankTable>
-            {teams.map((team) => (
-              <TeamGroup key={team.teamId} team={team} isMyTeam={team.teamId === myTeamId} />
-            ))}
-          </RankTable>
-        </div>
-      )}
+      {renderTab()}
 
       {/* 순위 배너 */}
       <div
