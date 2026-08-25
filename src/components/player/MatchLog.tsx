@@ -71,9 +71,13 @@ interface MatchLogProps {
 }
 
 export default function MatchLog({ telemetry, mapName, playerName, teamNames }: MatchLogProps) {
-  // 기본은 킬 + 모든 플레이어. 전체 유형을 다 뿌리면 기절이 킬과 거의 중복이라 목록이 두 배가 된다.
-  const [kind, setKind] = useState<KindFilter>("kill");
-  const [scope, setScope] = useState<ScopeFilter>("all");
+  // 기본은 전체 유형 + 우리 팀.
+  //
+  // 이 탭을 여는 이유는 대개 "우리 판이 어떻게 흘러갔나"라서 남의 팀 교전부터 보일 이유가 없다.
+  // 우리 팀으로 좁히면 목록이 짧아지므로 기절·부활까지 다 켜도 한눈에 읽힌다
+  // (모든 플레이어에서 전체 유형을 켜면 기절이 킬과 거의 겹쳐 목록이 두 배가 된다).
+  const [kind, setKind] = useState<KindFilter>("all");
+  const [scope, setScope] = useState<ScopeFilter>("team");
   // 지도 마커와 타임라인 항목이 서로를 가리킨다.
   // 같은 항목을 다시 누르면 해제된다 — 지도의 "전체 보기"도 이 경로를 쓴다.
   const [activeId, setActiveId] = useState<string | null>(null);
