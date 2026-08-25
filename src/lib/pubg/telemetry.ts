@@ -174,7 +174,8 @@ export function summarizeTelemetry(raw: unknown): MatchTelemetry | null {
           at: secondsFrom(startMs, event._D),
           attacker: nameOf(event.attacker),
           victim,
-          weapon: weaponName(toStr(event.damageCauserName)),
+          // 킬과 같은 경로로 읽는다 — 자기장 기절은 damageCauserName이 게임모드 내부 코드다
+          weapon: causeName(event),
           distanceM: Math.round(toNumber(event.distance) / 100),
           bodyPart: toStr(event.damageReason),
         });
