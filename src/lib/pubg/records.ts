@@ -1,6 +1,6 @@
 import "server-only";
 import axios from "axios";
-import { fetchPubgCached } from "@/lib/pubgProxy";
+import { fetchPubgCached, readCachedValue, writeCachedValue } from "@/lib/pubgProxy";
 import type { GameMode } from "@/lib/constants";
 import type {
   Player,
@@ -15,10 +15,16 @@ import type { MatchSummary } from "@/types/match";
 import { isValidMatchId } from "@/lib/pubg/matchId";
 import {
   MATCH_BATCH_TIMEOUT,
+  MATCH_DETAIL_TTL,
   MATCH_SUMMARY_SCHEMA_VERSION,
   MATCH_SUMMARY_TTL,
   MAX_SUMMARY_IDS,
+  TELEMETRY_SCHEMA_VERSION,
+  TELEMETRY_TIMEOUT,
+  TELEMETRY_TTL,
 } from "@/lib/pubg/matchConstants";
+import { summarizeTelemetry } from "@/lib/pubg/telemetry";
+import type { MatchTelemetry } from "@/types/telemetry";
 
 interface SeasonsResponse {
   data?: Array<{ id: string; attributes: { isCurrentSeason: boolean } }>;
@@ -308,4 +314,69 @@ export async function getMatchSummaries(
     .filter((result): result is PromiseFulfilledResult<MatchSummary | null> => result.status === "fulfilled")
     .map((result) => result.value)
     .filter((summary): summary is MatchSummary => summary !== null && summary.stats !== null);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 텔레메트리
+// ─────────────────────────────────────────────────────────────
+
+interface MatchAssetResponse {
+  included?: Array<{ type?: string; attributes?: { URL?: string } }>;
+}
+
+// 매치 응답의 included에 asset이 정확히 1개 있고 거기 텔레메트리 주소가 들어 있다.
+// 매치 6건으로 확인했다. 없으면 null.
+async function getTelemetryUrl(shard: string, matchId: string): Promise<string | null> {
+  try {
+    const res = await fetchPubgCached<MatchAssetResponse>(
+      shard,
+      `matches/${matchId}`,
+      {},
+      MATCH_DETAIL_TTL,
+    );
+    const asset = res.included?.find((item) => item.type === "asset");
+    return asset?.attributes?.URL ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 매치 텔레메트리 요약. 실패하면 null로 degrade한다.
+ *
+ * 텔레메트리는 PUBG API가 아니라 CDN에 있다. 인증도 rate limit도 없어서
+ * 프록시를 거치지 않고 직접 받는다. 대신 30MB가 넘으므로 원본은 캐시하지 않고
+ * 요약(약 30KB)만 남긴다.
+ *
+ * 요약은 매치 단위라 그 매치에 참가한 모든 플레이어가 같은 캐시를 공유한다.
+ */
+export async function getMatchTelemetry(
+  shard: string,
+  matchId: string,
+): Promise<MatchTelemetry | null> {
+  if (!isValidMatchId(matchId)) return null;
+
+  const cacheKey = `match:tel:${TELEMETRY_SCHEMA_VERSION}:${shard}:${matchId}`;
+  const cached = await readCachedValue<MatchTelemetry>(cacheKey);
+  if (cached) return cached;
+
+  const url = await getTelemetryUrl(shard, matchId);
+  if (!url) return null;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TELEMETRY_TIMEOUT);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+
+    const summary = summarizeTelemetry(await res.json());
+    if (!summary) return null;
+
+    await writeCachedValue(cacheKey, summary, TELEMETRY_TTL);
+    return summary;
+  } catch {
+    // 네트워크·타임아웃·형태 불일치는 상세에서 텔레메트리 구역만 생략하고 넘어간다
+    return null;
+  }
 }

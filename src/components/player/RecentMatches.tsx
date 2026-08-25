@@ -7,7 +7,7 @@ import Pagination from "@/components/ui/Pagination";
 import MatchCard from "@/components/match/MatchCard";
 import MatchDetail from "@/components/player/MatchDetail";
 import SectionHeading from "@/components/player/SectionHeading";
-import { useMatch, useMatchSummaries } from "@/hooks/useMatch";
+import { useMatch, useMatchSummaries, useTelemetry } from "@/hooks/useMatch";
 import { RECENT_MATCHES_PAGE_SIZE as PER_PAGE } from "@/lib/pubg/matchConstants";
 import {
   formatSurvival,
@@ -41,6 +41,10 @@ function MatchDetailLoader({
 }) {
   const { data, isPending, isError } = useMatch(shard, matchId, true);
 
+  // 텔레메트리는 부가 정보라 매치 상세와 나란히 요청하고 기다리지 않는다.
+  // 늦게 와도 주 무기·받은 피해 칸만 나중에 채워진다.
+  const { data: telemetry } = useTelemetry(shard, matchId, true);
+
   if (isPending) {
     return (
       <div className="flex justify-center rounded-lg border border-hairline bg-surface py-10">
@@ -64,7 +68,9 @@ function MatchDetailLoader({
     );
   }
 
-  return <MatchDetail match={data} playerId={playerId} stats={stats} />;
+  return (
+    <MatchDetail match={data} playerId={playerId} stats={stats} telemetry={telemetry} />
+  );
 }
 
 // 최근 매치 카드 하나 — 요약(summary)만으로 렌더, 상세는 펼칠 때 지연 조회

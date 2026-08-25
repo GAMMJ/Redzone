@@ -20,6 +20,17 @@ export const MATCH_DETAIL_TTL = 60 * 60;
 // 옛 모양이 TTL 내내 그대로 나간다. 모양을 바꿀 때마다 이 값을 올려 캐시를 무효화할 것.
 export const MATCH_SUMMARY_SCHEMA_VERSION = "v1";
 
+// 텔레메트리 요약 캐시. 매치는 불변이라 한 번 만들면 다시 만들 이유가 없다.
+export const TELEMETRY_TTL = 60 * 60 * 24 * 30;
+
+// 텔레메트리 요약 스키마 버전.
+// MatchTelemetry 모양을 바꾸면 옛 요약이 TTL 내내 그대로 나간다. 바꿀 때마다 올릴 것.
+export const TELEMETRY_SCHEMA_VERSION = "v2";
+
+// 텔레메트리는 30MB가 넘어 받고 파싱하는 데 시간이 걸린다(실측 약 420ms).
+// 기본 8초로는 빠듯할 수 있어 따로 넉넉히 잡는다.
+export const TELEMETRY_TIMEOUT = 20000;
+
 // 배치 요약은 매치를 한꺼번에 여러 건 연다. 한 건이 매달리면 나머지가 다 와도 끝나지 않으므로
 // 기본값보다 짧게 조여 느린 건만 버리고 나머지로 화면을 그린다.
 export const MATCH_BATCH_TIMEOUT = 5000;

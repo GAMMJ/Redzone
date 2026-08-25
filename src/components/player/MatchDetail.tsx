@@ -5,25 +5,39 @@ import type { ReactNode } from "react";
 import { Trophy } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import { formatMapName, formatSurvival, gameModeFullLabel } from "@/lib/pubg/matchLabels";
+import { mainWeaponOf } from "@/lib/pubg/telemetry";
 import { toMatchTeams } from "@/lib/pubg/matchTeams";
 import type { MatchTeam, MatchTeamMember } from "@/lib/pubg/matchTeams";
 import type { MatchResponse, ParticipantStats } from "@/types/match";
+import type { MatchTelemetry } from "@/types/telemetry";
 
 interface MatchDetailProps {
   match: MatchResponse;
   playerId: string;
   stats: ParticipantStats;
+  /** 텔레메트리 요약. 아직 안 왔거나 실패하면 undefined — 그 칸만 비운다. */
+  telemetry?: MatchTelemetry;
 }
 
 type DetailTab = "team" | "all";
 
-// 상단 요약 8칸 — 매치 API stats로 되는 것만 (받은 피해는 텔레메트리라 제외)
-function summaryStats(s: ParticipantStats): { label: string; value: string | number }[] {
+// 상단 요약 — 매치 API stats에 텔레메트리에서만 나오는 둘(주무기·받은 피해)을 더한다.
+// 텔레메트리가 없으면 그 두 칸만 "—"로 두고 나머지는 그대로 그린다.
+function summaryStats(
+  s: ParticipantStats,
+  telemetry: MatchTelemetry | undefined,
+  playerName: string,
+): { label: string; value: string | number }[] {
   const moveKm = ((s.walkDistance + s.rideDistance + s.swimDistance) / 1000).toFixed(1);
+  const mainWeapon = telemetry ? mainWeaponOf(telemetry, playerName) : null;
+  const taken = telemetry?.damageTakenByPlayer[playerName];
+
   return [
+    { label: "주 무기", value: mainWeapon ?? "—" },
     { label: "킬", value: s.kills },
     { label: "어시스트", value: s.assists },
     { label: "딜량", value: Math.round(s.damageDealt) },
+    { label: "받은 피해", value: typeof taken === "number" ? taken : "—" },
     { label: "생존", value: formatSurvival(s.timeSurvived) },
     { label: "헤드샷", value: s.headshotKills },
     { label: "DBNO", value: s.DBNOs },
@@ -242,7 +256,7 @@ const TABS: { value: DetailTab; label: string }[] = [
   { value: "all", label: "전체 순위" },
 ];
 
-export default function MatchDetail({ match, playerId, stats }: MatchDetailProps) {
+export default function MatchDetail({ match, playerId, stats, telemetry }: MatchDetailProps) {
   const [tab, setTab] = useState<DetailTab>("team");
   const attr = match.data.attributes;
   // 참가자 100명 Map 생성 + 로스터 정렬 + 팀별 정렬이라 탭을 누를 때마다 다시 돌 이유가 없다.
@@ -265,12 +279,20 @@ export default function MatchDetail({ match, playerId, stats }: MatchDetailProps
         <span className="text-caption text-text-tertiary">{formatSurvival(attr.duration)} 진행</span>
       </div>
 
-      {/* 요약 8칸 — 회색 카드 */}
-      <div className="mb-6 grid grid-cols-4 gap-3 rounded-lg bg-surface-subtle p-4 sm:grid-cols-8">
-        {summaryStats(stats).map((stat) => (
+{/* 요약 10칸 — 회색 카드. 주 무기는 글자라 다른 칸보다 작게 잡는다. */}
+      <div className="mb-6 grid grid-cols-4 gap-3 rounded-lg bg-surface-subtle p-4 sm:grid-cols-5 lg:grid-cols-10">
+        {summaryStats(stats, telemetry, stats.name).map((stat) => (
           <div key={stat.label} className="flex flex-col items-center gap-1">
-            <span className="text-lg font-bold text-text-primary">{stat.value}</span>
-            <span className="text-[11px] font-medium text-text-tertiary">{stat.label}</span>
+            <span
+              className={`font-bold text-text-primary ${
+                typeof stat.value === "string" && stat.value.length > 5 ? "text-caption" : "text-lg"
+              }`}
+            >
+              {stat.value}
+            </span>
+            <span className="whitespace-nowrap text-[11px] font-medium text-text-tertiary">
+              {stat.label}
+            </span>
           </div>
         ))}
       </div>

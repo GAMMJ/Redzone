@@ -113,6 +113,21 @@ async function fetchAndStore(
   return payload;
 }
 
+// PUBG 경로가 아닌 값도 같은 Redis에 담을 수 있게 열어둔다.
+// 텔레메트리 요약처럼 CDN에서 받아 직접 가공한 결과가 여기 해당한다.
+export async function readCachedValue<T>(cacheKey: string): Promise<T | null> {
+  return (await readCache(cacheKey)) as T | null;
+}
+
+export async function writeCachedValue(cacheKey: string, value: unknown, ttl: number): Promise<void> {
+  if (!redis) return;
+  try {
+    await redis.setex(cacheKey, ttl, value);
+  } catch {
+    // 캐시 저장 실패는 무시 — 호출부는 이미 값을 갖고 있다
+  }
+}
+
 // 서버 컴포넌트/배치용 — Response가 아닌 "데이터"를 반환하는 캐시 우선 조회. 실패 시 throw.
 export async function fetchPubgCached<T = unknown>(
   shard: string,
