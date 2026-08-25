@@ -297,6 +297,7 @@ export default function MatchDetail({ match, playerId, stats, telemetry }: Match
       return (
         <MatchLog
           telemetry={telemetry}
+          mapName={attr.mapName}
           playerName={stats.name}
           teamNames={myTeam?.members.map((m) => m.name) ?? []}
         />
