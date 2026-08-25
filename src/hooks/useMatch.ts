@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { pubgApi } from "@/api/pubg";
 import type { MatchResponse, MatchSummary } from "@/types/match";
+import type { MatchTelemetry } from "@/types/telemetry";
 
 // 매치 상세 — 카드를 펼쳤을 때만(enabled) 조회한다.
 // 종료된 매치는 불변이라 접었다 다시 펴도 재요청하지 않는다(staleTime은 queryClient 기본값).
@@ -11,6 +12,17 @@ export function useMatch(shard: string, matchId: string, enabled: boolean) {
     queryKey: ["match", shard, matchId],
     queryFn: () => pubgApi.getMatch(shard, matchId),
     enabled,
+  });
+}
+
+// 매치 텔레메트리 요약 — 상세를 펼쳤을 때만 조회한다.
+// 없어도 상세의 나머지는 그려야 하므로 실패를 재시도하지 않는다(404가 정상 경로다).
+export function useTelemetry(shard: string, matchId: string, enabled: boolean) {
+  return useQuery<MatchTelemetry>({
+    queryKey: ["telemetry", shard, matchId],
+    queryFn: () => pubgApi.getTelemetry(shard, matchId),
+    enabled,
+    retry: false,
   });
 }
 
