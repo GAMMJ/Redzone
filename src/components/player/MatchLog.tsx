@@ -128,11 +128,12 @@ export default function MatchLog({ telemetry, mapName, playerName, teamNames }: 
     return true;
   });
 
-  // 지도에 찍을 것은 좌표가 있는 항목뿐이다. 순번은 지금 보이는 목록 기준으로 매긴다.
+  // 지도에 찍을 것은 좌표가 있는 항목뿐이고, 번호는 그 마커와 목록을 잇는 용도다.
+  // 좌표가 없는 기절·부활에는 번호를 주지 않는다 — 주면 다음 마커의 번호를 미리 쓰게 돼
+  // 같은 번호가 여러 줄에 찍힌다.
   const markerOrder = new Map<string, number>();
   const markers: MapMarker[] = [];
   for (const entry of visible) {
-    markerOrder.set(entry.id, markers.length + 1);
     if (!entry.at2d) continue;
     markers.push({
       id: entry.id,
@@ -140,6 +141,7 @@ export default function MatchLog({ telemetry, mapName, playerName, teamNames }: 
       at: entry.at2d,
       mine: entry.actor === playerName,
     });
+    markerOrder.set(entry.id, markers.length);
   }
 
   const scopeFilters: { value: ScopeFilter; label: string }[] = [
@@ -196,11 +198,11 @@ export default function MatchLog({ telemetry, mapName, playerName, teamNames }: 
 
           <div className="flex flex-col gap-2">
             <div className="max-h-[560px] overflow-y-auto rounded-lg border border-hairline">
-              {visible.map((entry, index) => (
+              {visible.map((entry) => (
                 <LogRow
                   key={entry.id}
                   entry={entry}
-                  order={markerOrder.get(entry.id) ?? index + 1}
+                  order={markerOrder.get(entry.id) ?? null}
                   playerName={playerName}
                   active={entry.id === activeId}
                   onSelect={toggleActive}
@@ -249,7 +251,7 @@ function LogRow({
   onSelect,
 }: {
   entry: LogEntry;
-  order: number;
+  order: number | null;
   playerName: string;
   active: boolean;
   onSelect: (id: string) => void;
@@ -271,7 +273,7 @@ function LogRow({
         active ? "bg-primary/15" : mine ? "bg-primary-soft" : "bg-surface hover:bg-surface-subtle"
       }`}
     >
-      {/* 지도 마커에 찍힌 번호와 같은 값이라 서로를 눈으로 이을 수 있다 */}
+      {/* 지도 마커에 찍힌 번호와 같은 값이다. 좌표가 없는 항목은 비워 두되 칸은 남긴다 */}
       <span className="w-6 shrink-0 text-right text-[11px] text-text-tertiary">{order}</span>
       <span className="w-11 shrink-0 text-text-tertiary">{formatClock(entry.at)}</span>
 
