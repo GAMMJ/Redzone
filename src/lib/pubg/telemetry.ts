@@ -1,6 +1,6 @@
 // 매치 텔레메트리(이벤트 5만 개, 30MB 이상) → 화면이 쓸 요약.
 // 이벤트 종류와 필드는 docs/local/TELEMETRY.md에 정리돼 있다.
-import { DAMAGE_CAUSER_NAME } from "@/lib/pubg/damageCauserName";
+import { causeName, weaponName } from "@/lib/pubg/damageNames";
 import type {
   MatchTelemetry,
   TelemetryGroggy,
@@ -12,70 +12,6 @@ import type {
 
 /** 플레이어당 남길 무기 수. 첫 항목이 주무기다. */
 const WEAPONS_PER_PLAYER = 3;
-
-// 가해자 없이 죽는 경우(자기장·낙사 등). 이때 killerDamageInfo는 비어 있고
-// 실제 원인은 finishDamageInfo에 있는데, 거기 코드가 TslGameModeBase_BattleRoyaleBP_C 같은
-// 내부 이름이라 그대로 보여줄 수 없다. 피해 종류로 바꿔 읽을 수 있게 한다.
-const DEATH_CAUSE: Record<string, string> = {
-  Damage_BlueZone: "자기장",
-  Damage_BlueZoneGrenade: "블루존 수류탄",
-  Damage_Instant_Fall: "낙사",
-  Damage_Drown: "익사",
-  Damage_Explosion_RedZone: "레드존",
-  Damage_Groggy: "출혈",
-  Damage_DBNO: "출혈",
-  Damage_Molotov: "화염병",
-  Damage_Blizzard: "눈보라",
-};
-
-// 공식 사전 위에 덮어쓰는 이름.
-//
-// 총기는 한국 유저도 영문으로 부르므로(ACE32·Kar98k·Beryl) 사전 값을 그대로 쓴다.
-// 사전이 코드명보다 정확한 경우도 많다 — WeapAK47_C는 실제 게임에서 AKM이고 사전이 그렇게 준다.
-//
-// 반면 투척류는 한국어로 부른다. 사망 원인을 "자기장"·"낙사"로 적는 것과 결이 같다.
-// 사전 파일(damageCauserName.ts)은 공식 데이터 사본이라 손대지 않고 여기서만 갈아끼운다.
-const NAME_OVERRIDE: Record<string, string> = {
-  ProjGrenade_C: "수류탄",
-  ProjStickyGrenade_C: "점착 폭탄",
-
-  // 화염병 한 발은 코드 셋을 남긴다 — 병 직격, 바닥 불길, 옮겨 붙은 화상.
-  // 실측하면 직격은 드물고(1건) 대부분 불길과 화상으로 깎인다.
-  // 사용자에게는 "화염병에 죽었다"가 전부라 셋을 하나로 뭉친다. 소이탄도 같은 이유로 묶는다.
-  ProjMolotov_C: "화염병",
-  ProjMolotov_DamageField_Direct_C: "화염병",
-  BP_FireEffectController_C: "화염병",
-  BP_MolotovFireDebuff_C: "화염병",
-  ProjIncendiary_C: "소이탄",
-  BP_IncendiaryDebuff_C: "소이탄",
-};
-
-// 공식 사전은 2024-10 이후 갱신되지 않아 최신 무기가 빠져 있다(RPD 등).
-// 코드에서 접두·접미를 걷어내면 대체로 읽을 만한 이름이 된다. WeapRPD_C → RPD
-function humanizeCode(code: string): string {
-  return (
-    code
-      .replace(/^Weap/, "")
-      .replace(/^Proj/, "")
-      .replace(/^BP_/, "")
-      .replace(/_C(_\d+)?$/, "")
-      .replace(/_/g, " ")
-      .trim() || code
-  );
-}
-
-export function weaponName(code: string | undefined | null): string {
-  if (!code) return "";
-  return NAME_OVERRIDE[code] ?? DAMAGE_CAUSER_NAME[code] ?? humanizeCode(code);
-}
-
-// 무기든 환경이든 "무엇에 죽었나"를 한 문자열로. 피해 종류가 자기장·낙사면 그쪽을 우선한다.
-function causeName(info: Record<string, unknown>): string {
-  const category = toStr(info.damageTypeCategory);
-  const byCategory = DEATH_CAUSE[category];
-  if (byCategory) return byCategory;
-  return weaponName(toStr(info.damageCauserName));
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -156,7 +92,7 @@ export function summarizeTelemetry(raw: unknown): MatchTelemetry | null {
           at: secondsFrom(startMs, event._D),
           killer: nameOf(event.killer),
           victim,
-          weapon: causeName(info),
+          weapon: causeName(toStr(info.damageTypeCategory), toStr(info.damageCauserName)),
           // distance는 가해자가 없으면 -1로 온다
           distanceM: Math.max(0, Math.round(toNumber(info.distance) / 100)),
           bodyPart: toStr(info.damageReason),
@@ -174,7 +110,7 @@ export function summarizeTelemetry(raw: unknown): MatchTelemetry | null {
           at: secondsFrom(startMs, event._D),
           attacker: nameOf(event.attacker),
           victim,
-          weapon: weaponName(toStr(event.damageCauserName)),
+          weapon: causeName(toStr(event.damageTypeCategory), toStr(event.damageCauserName)),
           distanceM: Math.round(toNumber(event.distance) / 100),
           bodyPart: toStr(event.damageReason),
         });
