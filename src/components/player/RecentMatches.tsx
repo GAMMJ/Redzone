@@ -14,6 +14,7 @@ import { useMatch, useMatchSummaries, useTelemetry } from "@/hooks/useMatch";
 import { useDocumentScrollRestore } from "@/hooks/useDocumentScrollRestore";
 import { rememberReturnState, useReturnState } from "@/hooks/useReturnState";
 import { keepAnchored, opensElsewhere } from "@/lib/viewRestore";
+import { failureMessage } from "@/lib/rateLimit";
 import { RECENT_MATCHES_PAGE_SIZE as PER_PAGE } from "@/lib/pubg/matchConstants";
 import {
   formatSurvival,
@@ -81,7 +82,7 @@ function MatchDetailLoader({
   tab: DetailTab;
   onTabChange: (next: DetailTab) => void;
 }) {
-  const { data, isPending, isError, isFetching, refetch } = useMatch(shard, matchId, true);
+  const { data, isPending, isError, isFetching, refetch, error } = useMatch(shard, matchId, true);
 
   // 텔레메트리는 부가 정보라 매치 상세와 나란히 요청하고 기다리지 않는다.
   // 늦게 와도 주 무기·받은 피해 칸만 나중에 채워진다.
@@ -107,7 +108,8 @@ function MatchDetailLoader({
     return (
       <div className="rounded-lg border border-hairline bg-surface">
         <LoadFailure
-          message="매치 상세를 불러오지 못했습니다."
+          // 한도 초과면 몇 초 뒤에 되는지 알려 준다 — 프록시가 내려보내는 값을 여태 버리고 있었다.
+          message={failureMessage(error, "매치 상세")}
           // 서버 렌더가 아니라 이 조회만 다시 부른다. 카드를 접었다 펴는 걸
           // 사용자가 스스로 알아내게 두지 않는다.
           onRetry={() => void refetch()}
