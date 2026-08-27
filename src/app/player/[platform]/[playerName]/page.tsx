@@ -78,7 +78,13 @@ export default async function PlayerProfilePage({ params }: { params: Promise<Pa
 
   return (
     <Container className="flex flex-col gap-8 py-10">
-      <ProfileHeader player={profile.player} platform={platform} rankedStat={squadRanked} />
+      <ProfileHeader
+        player={profile.player}
+        platform={platform}
+        rankedStat={squadRanked}
+        // 갱신을 눌렀을 때 결과가 실패였는지 버튼이 알아야 대기를 걸지 말지 정할 수 있다.
+        loadFailed={profile.ranked.failed || profile.seasonStats.failed}
+      />
       <ModeStats
         ranked={profile.ranked.data}
         season={profile.seasonStats.data}
