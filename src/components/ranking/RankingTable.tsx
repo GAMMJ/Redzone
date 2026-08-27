@@ -27,7 +27,11 @@ export default async function RankingTable({ platform, season }: RankingTablePro
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-hairline bg-surface shadow-xs">
+    // overflow-hidden이 아니라 overflow-clip이다. 둘 다 둥근 모서리 밖을 잘라내지만,
+    // hidden은 이 요소를 스크롤 컨테이너로 만들어 안쪽 sticky가 뷰포트가 아니라
+    // 여기에 붙는다. 이 상자는 스크롤되지 않으니 헤더가 고정되지 않는다.
+    // clip은 스크롤 컨테이너를 만들지 않아 sticky가 뷰포트 기준으로 동작한다.
+    <div className="overflow-clip rounded-lg border border-hairline bg-surface shadow-xs">
       <RankingTableHeader />
 
       <ul>

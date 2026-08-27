@@ -145,8 +145,14 @@ export const RANKING_COLUMNS: RankingColumn[] = [
 // 컬럼 헤더 — 데이터 테이블과 스켈레톤이 같은 헤더를 쓰도록 컬럼 정의 옆에 둔다.
 export function RankingTableHeader() {
   return (
+    // 스크롤하는 동안 화면 맨 위에 붙는다. 상위 100명을 한 화면에 담을 수 없어 반드시
+    // 스크롤하게 되는데, 헤더가 사라지면 지표 일곱 개 중 무엇이 무엇인지 알 수 없다.
+    // 특히 평균 딜량·매치당 킬·승률은 셋 다 막대+숫자라 생김새가 같다.
+    //
+    // 사이트 헤더는 sticky가 아니라 함께 스크롤되므로 오프셋 없이 top-0이면 된다.
+    // 감싼 쪽이 overflow-clip이어야 이게 동작한다 — RankingTable 주석 참고.
     <div
-      className={`flex items-center border-b border-hairline bg-primary-soft px-6 py-3 text-xs font-semibold tracking-[0.3px] text-primary ${RANKING_ROW_GAP}`}
+      className={`sticky top-0 z-10 flex items-center border-b border-hairline bg-primary-soft px-6 py-3 text-xs font-semibold tracking-[0.3px] text-primary ${RANKING_ROW_GAP}`}
     >
       {RANKING_COLUMNS.map((column) => (
         <span key={column.key} className={column.cellClassName}>
