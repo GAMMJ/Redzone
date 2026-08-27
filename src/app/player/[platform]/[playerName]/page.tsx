@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Container from "@/components/layout/Container";
+import LoadFailure from "@/components/ui/LoadFailure";
 import ProfileHeader from "@/components/player/ProfileHeader";
 import ModeStats from "@/components/player/ModeStats";
 import RecentMatches from "@/components/player/RecentMatches";
@@ -13,6 +14,7 @@ import {
   getMatchSummaries,
 } from "@/lib/pubg/records";
 import { isValidShard } from "@/lib/pubgProxy";
+import { failureMessage, isRateLimited } from "@/lib/rateLimit";
 import { RECENT_MATCHES_PAGE_SIZE } from "@/lib/pubg/matchConstants";
 
 interface PageParams {
@@ -70,7 +72,22 @@ export default async function PlayerProfilePage({ params }: { params: Promise<Pa
   const { platform, playerName } = await params;
   if (!isValidShard(platform)) notFound();
 
-  const profile = await loadProfile(platform, playerName);
+  // 한도 초과는 오류 경계로 넘기지 않는다.
+  //
+  // 서버에서 난 오류는 digest만 클라로 내려오고 응답 헤더는 오지 않아, 오류 화면에서는
+  // 몇 초 뒤에 되는지 알 수 없다. 여기서는 Retry-After가 손에 있으니 그 자리에서 말해 준다.
+  // 분당 10회 한도(프로필 한 번에 4콜)라 이 실패가 가장 흔하다.
+  let profile: Awaited<ReturnType<typeof loadProfile>>;
+  try {
+    profile = await loadProfile(platform, playerName);
+  } catch (err) {
+    if (!isRateLimited(err)) throw err;
+    return (
+      <Container className="py-20">
+        <LoadFailure message={failureMessage(err, "전적")} />
+      </Container>
+    );
+  }
   if (!profile) notFound();
 
   // 헤더 티어는 스쿼드 TPP 기준(없으면 스쿼드 1인칭)
