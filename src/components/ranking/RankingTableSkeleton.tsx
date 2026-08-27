@@ -6,7 +6,9 @@ const ROWS = Array.from({ length: 20 });
 
 export default function RankingTableSkeleton() {
   return (
-    <div className="overflow-hidden rounded-lg border border-hairline bg-surface shadow-xs">
+    // 셸은 RankingTable과 같은 클래스여야 한다 — overflow-clip인 이유는 그쪽 주석 참고.
+    // 다르면 로딩 중에는 헤더가 안 붙어 있다가 실제 표로 바뀌며 갑자기 붙는다.
+    <div className="overflow-clip rounded-lg border border-hairline bg-surface shadow-xs">
       <RankingTableHeader />
 
       <ul>
