@@ -4,7 +4,8 @@ import Avatar from "@/components/ui/Avatar";
 import LinkButton from "@/components/ui/LinkButton";
 import TierLabel from "@/components/ui/TierLabel";
 import { playerPath } from "@/lib/paths";
-import { getLeaderboard } from "@/lib/pubg/records";
+import { getLeaderboard, type Loaded } from "@/lib/pubg/records";
+import LoadFailure from "@/components/ui/LoadFailure";
 import { PLATFORM_LABEL } from "@/lib/constants";
 import type { Platform } from "@/lib/constants";
 import { LEADERBOARD_COL as COL } from "./leaderboardColumns";
@@ -12,8 +13,13 @@ import { LEADERBOARD_COL as COL } from "./leaderboardColumns";
 interface LiveRankingProps {
   // 어느 플랫폼 리더보드인지 (steam·kakao) — 카드마다 다르게 표시
   platform: Platform;
-  // 현재 시즌(id·번호). 없으면 리더보드 조회 생략. (steam·kakao 모두 PC 시즌 공유)
-  season: { id: string; number: number } | null;
+  /**
+   * 현재 시즌(id·번호). (steam·kakao 모두 PC 시즌 공유)
+   *
+   * 조회 실패(failed)와 진행 중인 시즌 없음(data가 null)은 다른 화면이 된다.
+   * 실패는 리더보드 조회를 건너뛰되 "랭킹이 없다"고 말하지 않는다.
+   */
+  season: Loaded<{ id: string; number: number } | null>;
 }
 
 // 플랫폼별 브랜드 아이콘 — public/icons. Steam은 정사각 로고, Kakao는 워드마크 앞 "k" 글자라 폭이 좁음.
@@ -30,9 +36,12 @@ export default async function LiveRanking({
   platform,
   season,
 }: LiveRankingProps) {
-  const entries = season
-    ? await getLeaderboard(platform, "squad", season.id)
-    : [];
+  const entries = season.data
+    ? await getLeaderboard(platform, "squad", season.data.id)
+    : { data: [], failed: false };
+  // 실패 / 진행 중인 시즌 없음 / 0건을 가려 말한다. 셋을 한 문구로 뭉치면 429가 났을 때
+  // 사용자에게는 랭킹이 텅 빈 것으로 보인다.
+  const failed = season.failed || entries.failed;
   const icon = PLATFORM_ICON[platform];
 
   return (
@@ -61,9 +70,14 @@ export default async function LiveRanking({
         </LinkButton>
       </div>
 
-      {entries.length === 0 ? (
+      {failed ? (
+        <LoadFailure
+          message="랭킹을 불러오지 못했습니다."
+          className="border-t border-hairline"
+        />
+      ) : entries.data.length === 0 ? (
         <p className="border-t border-hairline px-6 py-8 text-center text-caption text-text-tertiary">
-          표시할 랭킹이 없습니다
+          {season.data ? "표시할 랭킹이 없습니다" : "진행 중인 시즌이 없습니다"}
         </p>
       ) : (
         <>
@@ -76,7 +90,7 @@ export default async function LiveRanking({
           </div>
 
           <ul>
-            {entries.map((entry) => (
+            {entries.data.map((entry) => (
               <li
                 key={entry.name}
                 className="border-b border-hairline last:border-b-0"
