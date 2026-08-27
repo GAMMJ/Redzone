@@ -1,26 +1,9 @@
 import { QueryClient, isServer } from "@tanstack/react-query";
 import axios from "axios";
+import { retryAfterMs } from "@/lib/rateLimit";
 
 function statusOf(error: unknown): number | undefined {
   return axios.isAxiosError(error) ? error.response?.status : undefined;
-}
-
-// Retry-After는 "초 단위 숫자"와 "HTTP-date" 두 형식이 허용된다(RFC 9110).
-// 빈 문자열을 그냥 Number()에 넘기면 0이 되어 429 직후 즉시 재시도가 된다 — 먼저 걸러낸다.
-// 값이 없거나 해석할 수 없으면 null을 돌려 호출부가 지수 백오프로 넘어가게 한다.
-function retryAfterMs(error: unknown): number | null {
-  if (!axios.isAxiosError(error)) return null;
-  const raw = error.response?.headers?.["retry-after"];
-  if (typeof raw === "number") return Math.max(0, raw) * 1000;
-  if (typeof raw !== "string" || raw.trim() === "") return null;
-
-  const seconds = Number(raw);
-  if (Number.isFinite(seconds)) return Math.max(0, seconds) * 1000;
-
-  const at = Date.parse(raw);
-  if (Number.isFinite(at)) return Math.max(0, at - Date.now());
-
-  return null;
 }
 
 function makeQueryClient() {
