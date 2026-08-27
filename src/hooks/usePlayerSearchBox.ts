@@ -14,17 +14,43 @@ export function usePlayerSearchBox(initialPlatform: Platform = "steam") {
   const [platform, setPlatform] = useState<Platform>(initialPlatform);
   const [query, setQuery] = useState("");
 
+  // 빈 입력으로 눌렀을 때 아무 일도 안 일어나면 사용자는 검색이 고장 난 것으로 본다.
+  // 왜 안 되는지 말해 주고, 호출부가 입력란에 초점을 돌려줄 수 있게 결과를 알려 준다.
+  const [error, setError] = useState<string | null>(null);
+
   // 지정한 닉네임+플랫폼으로 검색 — 최근 검색 항목 클릭 재검색에도 재사용
-  function searchWith(name: string, target: Platform) {
+  // @returns 실제로 이동했는가
+  function searchWith(name: string, target: Platform): boolean {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      setError("닉네임을 입력해 주세요");
+      return false;
+    }
+    setError(null);
+    // 존재 여부는 이동해 봐야 알 수 있다(조회가 곧 이동이다). 없는 닉네임이면 프로필의
+    // not-found 화면이 이 기록을 도로 지운다 — 오타가 목록에 남지 않게.
     addRecent(trimmed, target);
     router.push(playerPath(target, trimmed));
+    return true;
   }
 
-  function handleSubmit() {
-    searchWith(query, platform);
+  function handleSubmit(): boolean {
+    return searchWith(query, platform);
   }
 
-  return { platform, setPlatform, query, setQuery, handleSubmit, searchWith };
+  // 다시 입력하기 시작하면 안내를 지운다. 고치는 중에 빨간 글씨가 남아 있으면 거슬린다.
+  function changeQuery(next: string) {
+    setQuery(next);
+    if (error) setError(null);
+  }
+
+  return {
+    platform,
+    setPlatform,
+    query,
+    setQuery: changeQuery,
+    error,
+    handleSubmit,
+    searchWith,
+  };
 }
