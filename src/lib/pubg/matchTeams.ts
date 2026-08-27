@@ -12,7 +12,14 @@ export interface MatchTeam {
 }
 
 export interface MatchTeamMember {
+  /** 참가자 id. 닉네임은 한 매치 안에서 겹칠 수 있어 목록 key로는 이쪽을 쓴다. */
+  playerId: string;
   name: string;
+  // 봇인지 — 전적 페이지가 없으므로 링크를 걸지 않는다.
+  // 닉네임만으로는 사람과 구분되지 않는다(ANTRIPPING_ · Nikewazi93 같은 꼴).
+  isBot: boolean;
+  /** 전적 페이지로 보낼 수 있는가. 봇이 아닌 것과 같지 않다 — 모르는 접두사도 여기서 걸린다. */
+  linkable: boolean;
   // 검색한 플레이어인지 — 표에서 강조한다
   isTarget: boolean;
   kills: number;
@@ -51,6 +58,22 @@ export function findPlayerStats(match: MatchResponse, playerId: string): Partici
   return found?.attributes.stats ?? null;
 }
 
+/**
+ * 참가자 id의 접두사로 갈린다. 사람은 `account.524b3f5b…`, 봇은 `ai.2189` 꼴이다.
+ * 실측하면 한 매치 100명 중 넷쯤이 봇이다.
+ *
+ * 둘을 따로 두는 이유는 실패하는 방향이 달라야 해서다. 배지는 봇이라고 확신할 때만 붙이고,
+ * 링크는 사람이라고 확신할 때만 건다. PUBG가 앞으로 다른 접두사를 내보내면 배지는 안 붙고
+ * 링크도 안 걸린다 — 없는 사람에게 보내 404를 띄우는 것보다 낫다.
+ */
+function isBotId(playerId: string): boolean {
+  return playerId.startsWith("ai.");
+}
+
+function isLinkableId(playerId: string): boolean {
+  return playerId.startsWith("account.");
+}
+
 // 팀별로 그룹핑해 순위 오름차순 팀 목록으로. 대상 플레이어에게 하이라이트 플래그를 준다.
 // 팀 이름은 PUBG가 주지 않아(teamId 숫자만) 컴포넌트에서 "팀 {teamId}"로 표기한다.
 export function toMatchTeams(match: MatchResponse, playerId: string): MatchTeam[] {
@@ -72,7 +95,10 @@ export function toMatchTeams(match: MatchResponse, playerId: string): MatchTeam[
       totalKills += st.kills;
       totalDamage += st.damageDealt;
       members.push({
+        playerId: st.playerId,
         name: st.name,
+        isBot: isBotId(st.playerId),
+        linkable: isLinkableId(st.playerId),
         isTarget: st.playerId === playerId,
         kills: st.kills,
         assists: st.assists,
