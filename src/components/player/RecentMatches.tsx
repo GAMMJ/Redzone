@@ -1,13 +1,18 @@
 "use client";
 
 import { useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import Spinner from "@/components/ui/Spinner";
 import Pagination from "@/components/ui/Pagination";
 import MatchCard from "@/components/match/MatchCard";
 import MatchDetail from "@/components/player/MatchDetail";
+import type { DetailTab } from "@/components/player/MatchDetail";
 import SectionHeading from "@/components/player/SectionHeading";
 import { useMatch, useMatchSummaries, useTelemetry } from "@/hooks/useMatch";
+import { useDocumentScrollRestore } from "@/hooks/useDocumentScrollRestore";
+import { rememberReturnState, useReturnState } from "@/hooks/useReturnState";
+import { keepAnchored, opensElsewhere } from "@/lib/viewRestore";
 import { RECENT_MATCHES_PAGE_SIZE as PER_PAGE } from "@/lib/pubg/matchConstants";
 import {
   formatSurvival,
@@ -29,8 +34,42 @@ function readPage(raw: string | null, totalPages: number): number {
   return Math.min(parsed, Math.max(1, totalPages));
 }
 
+/** 뒤로 왔을 때 되살릴 화면 상태. */
+interface MatchView {
+  /** 펼쳐 둔 매치 id. 없으면 전부 접힌 상태 */
+  match: string | null;
+  tab: DetailTab;
+  /** 떠날 때 문서가 놓여 있던 자리 */
+  scrollY?: number;
+}
+
+const INITIAL_VIEW: MatchView = { match: null, tab: "team" };
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+// 적어 둔 것을 그대로 믿지 않는다.
+//
+// 배포로 형태가 바뀐 뒤 옛 세션이 남아 있으면 엉뚱한 값이 상태로 들어간다. tab이 셋 중
+// 어느 것도 아니면 어느 탭도 선택되지 않은 화면이 되는데, 터지지 않아서 더 알아채기 어렵다.
+function parseView(raw: unknown): MatchView | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const value = raw as Record<string, unknown>;
+  const { match, tab, scrollY } = value;
+  if (match !== null && typeof match !== "string") return null;
+  if (tab !== "team" && tab !== "all" && tab !== "log") return null;
+  // typeof NaN도 typeof Infinity도 "number"라 타입만 봐서는 걸러지지 않는다.
+  // NaN이 들어오면 "문서가 이만큼 자랐나" 비교가 영원히 거짓이라 되살리기가 조용히 헛돌고,
+  // 음수면 있지도 않은 자리로 스크롤한다. sessionStorage는 사람이 고칠 수 있으니 여기서 막는다.
+  if (scrollY !== undefined && (!isFiniteNumber(scrollY) || scrollY < 0)) return null;
+  return { match, tab, scrollY };
+}
+
 // 상세는 카드를 펼쳤을 때만 마운트된다 — 그때 매치 단건을 조회한다.
 function MatchDetailLoader({
+  tab,
+  onTabChange,
   shard,
   matchId,
   playerId,
@@ -38,6 +77,8 @@ function MatchDetailLoader({
   shard: string;
   matchId: string;
   playerId: string;
+  tab: DetailTab;
+  onTabChange: (next: DetailTab) => void;
 }) {
   const { data, isPending, isError } = useMatch(shard, matchId, true);
 
@@ -69,12 +110,24 @@ function MatchDetailLoader({
   }
 
   return (
-    <MatchDetail match={data} playerId={playerId} stats={stats} telemetry={telemetry} />
+    <MatchDetail
+      match={data}
+      platform={shard}
+      playerId={playerId}
+      stats={stats}
+      telemetry={telemetry}
+      tab={tab}
+      onTabChange={onTabChange}
+    />
   );
 }
 
 // 최근 매치 카드 하나 — 요약(summary)만으로 렌더, 상세는 펼칠 때 지연 조회
 function RecentMatchCard({
+  expanded,
+  onToggle,
+  tab,
+  onTabChange,
   shard,
   summary,
   playerId,
@@ -82,12 +135,18 @@ function RecentMatchCard({
   shard: string;
   summary: MatchSummary;
   playerId: string;
+  expanded: boolean;
+  onToggle: () => void;
+  tab: DetailTab;
+  onTabChange: (next: DetailTab) => void;
 }) {
   const s = summary.stats;
   if (!s) return null;
 
   return (
     <MatchCard
+      expanded={expanded}
+      onToggle={onToggle}
       placement={s.winPlace}
       totalTeams={summary.totalTeams}
       placementVariant={placementVariant(s.winPlace)}
@@ -101,7 +160,13 @@ function RecentMatchCard({
       playedAt={summary.createdAt}
       modePrefix={matchTypePrefix(summary.matchType, summary.gameMode)}
       expandedContent={() => (
-        <MatchDetailLoader shard={shard} matchId={summary.id} playerId={playerId} />
+        <MatchDetailLoader
+          shard={shard}
+          matchId={summary.id}
+          playerId={playerId}
+          tab={tab}
+          onTabChange={onTabChange}
+        />
       )}
     />
   );
@@ -130,6 +195,13 @@ export default function RecentMatches({
   const searchParams = useSearchParams();
   const [page, setPage] = useState(() => readPage(searchParams.get(PAGE_PARAM), totalPages));
   const pageIds = matchIds.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  // 펼침과 탭은 주소에 담지 않는다. 담으면 새로고침해도 열린 채로 떠서,
+  // "처음부터 다시"라는 새로고침의 뜻과 어긋나고 상세를 다시 불러오느라 호출까지 쓴다.
+  // 링크를 눌러 나갈 때만 적어 두고, 뒤로 왔을 때 한 번 쓰고 지운다.
+  const [view, setView] = useReturnState<MatchView>(playerId, INITIAL_VIEW, parseView);
+  const expandedId = view.match;
+  const tab = view.tab;
 
   // 현재 페이지 매치의 경량 요약만 한 요청으로 조회
   // (페이지 이동 시 다음 10개를 새로 조회, 뒤로 오면 캐시 히트)
@@ -166,24 +238,71 @@ export default function RecentMatches({
     return "이 페이지에는 표시할 매치가 없습니다";
   }
 
-  function handlePage(next: number) {
-    setPage(next);
-
-    // router.replace를 쓰면 쿼리 변경이 서버 왕복을 일으켜 프로필 SSR이 통째로 다시 돈다.
-    // PUBG 한도가 분당 10회인데 프로필 1회가 4회를 쓰므로 페이지마다 그 비용을 낼 수 없다.
-    // history API로 주소만 바꾸면 렌더 없이 새로고침·공유만 얻는다.
+  // 주소만 바꾼다. router.replace를 쓰면 쿼리가 바뀔 때마다 서버 왕복이 일어나 프로필 SSR이
+  // 통째로 다시 돈다(handlePage 주석 참고). 그 비용을 카드 펼칠 때마다 낼 수는 없다.
+  function syncUrl(page: number) {
     const params = new URLSearchParams(searchParams);
-    if (next <= 1) params.delete(PAGE_PARAM);
-    else params.set(PAGE_PARAM, String(next));
+    if (page <= 1) params.delete(PAGE_PARAM);
+    else params.set(PAGE_PARAM, String(page));
     const query = params.toString();
     window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+  }
+
+  // 한 번에 한 장만 펼친다. 다시 누르면 접힌다.
+  //
+  // 새로 펼친 카드는 언제나 첫 탭에서 연다. 카드마다 탭을 따로 들고 있던 예전 동작과 같다.
+  // 탭까지 이어 두면 앞 카드에서 로그를 보다 접고 다른 카드를 열었을 때 그쪽도 로그로 열린다.
+  function handleToggle(matchId: string) {
+    setView((prev) =>
+      prev.match === matchId
+        ? { ...prev, match: null }
+        : { ...prev, match: matchId, tab: INITIAL_VIEW.tab },
+    );
+  }
+
+  function handleTab(next: DetailTab) {
+    setView((prev) => ({ ...prev, tab: next }));
+  }
+
+  // 뒤로 왔을 때 문서를 보던 자리로 되돌린다.
+  //
+  // 브라우저도 스크롤을 되돌리지만 카드가 아직 접혀 있을 때라 문서가 짧아 어긋난다.
+  // 펼침이 되살아나 문서가 다시 길어진 뒤에 맞춰야 한다.
+  useDocumentScrollRestore(view.scrollY, playerId);
+
+  // 참가자를 눌러 나가는 순간의 상태를 적어 둔다. 뒤로 오면 이걸로 되살린다.
+  //
+  // 상태가 바뀔 때마다 적지 않는 이유는, 그러면 새로고침에도 남아 새로고침이 처음 상태로
+  // 돌아가지 않기 때문이다. 나가는 순간에만 적으면 그 문제가 없다.
+  function handleSectionClick(event: ReactMouseEvent<HTMLElement>) {
+    // 새 탭으로 열리는 클릭은 이 화면을 떠나지 않는다. 그때 적어 두면 나중에 되살아난다.
+    if (opensElsewhere(event)) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    if (target.closest('a[href^="/player/"]')) {
+      rememberReturnState(playerId, { ...view, scrollY: Math.round(window.scrollY) });
+      return;
+    }
+
+    // 상세보기를 누르면 위에서 펼쳐져 있던 카드가 접히며 목록이 위로 당겨진다.
+    // 방금 누른 카드는 제자리에 있어야 한다.
+    const toggle = target.closest("button[aria-expanded]");
+    if (toggle instanceof HTMLElement) keepAnchored(toggle);
+  }
+
+  function handlePage(next: number) {
+    setPage(next);
+    // 페이지를 옮기면 펼쳐 둔 카드는 이 페이지에 없다. 같이 접는다.
+    setView({ match: null, tab: "team" });
+    syncUrl(next);
 
     // 페이지 이동 시 "최근 매치" 제목이 상단에 오도록 스크롤
     sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   return (
-    <section ref={sectionRef} className="flex flex-col gap-4">
+    <section ref={sectionRef} onClickCapture={handleSectionClick} className="flex flex-col gap-4">
       <SectionHeading>최근 매치</SectionHeading>
 
       {isLoading ? (
@@ -209,7 +328,16 @@ export default function RecentMatches({
               <p className="text-caption text-text-tertiary">{emptyMessage()}</p>
             ) : (
               pageItems.map((m) => (
-                <RecentMatchCard key={m.id} shard={shard} summary={m} playerId={playerId} />
+                <RecentMatchCard
+                  key={m.id}
+                  shard={shard}
+                  summary={m}
+                  playerId={playerId}
+                  expanded={expandedId === m.id}
+                  onToggle={() => handleToggle(m.id)}
+                  tab={tab}
+                  onTabChange={handleTab}
+                />
               ))
             )}
           </div>
