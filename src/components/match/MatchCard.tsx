@@ -30,7 +30,7 @@ const VARIANT: Record<PlacementVariant, { accent: string; bg: string; fg: string
     },
   };
 
-interface MatchCardProps {
+interface MatchCardBaseProps {
   placement: number;
   // 총 팀 수 — 있으면 "#등수 / 팀수" 형태로 표시
   totalTeams?: number;
@@ -49,6 +49,21 @@ interface MatchCardProps {
   expandedContent?: () => ReactNode;
 }
 
+/**
+ * 펼침을 누가 쥐는가.
+ *
+ * 부모가 쥐면 남의 프로필에 다녀와도 자리를 되살릴 수 있다 — 카드는 언마운트되며 잊는다.
+ * 주지 않으면 예전처럼 카드가 스스로 든다.
+ *
+ * 둘을 쌍으로 묶는 이유는, `expanded`만 주고 `onToggle`을 빠뜨리면 눌러도 아무 일도
+ * 일어나지 않는 버튼이 되기 때문이다. 부모가 준 값이 계속 이겨서 조용히 죽는다.
+ */
+type ExpandControl =
+  | { expanded: boolean; onToggle: () => void }
+  | { expanded?: undefined; onToggle?: undefined };
+
+type MatchCardProps = MatchCardBaseProps & ExpandControl;
+
 export default function MatchCard({
   placement,
   totalTeams,
@@ -63,8 +78,13 @@ export default function MatchCard({
   playedAt,
   modePrefix,
   expandedContent,
+  expanded: expandedProp,
+  onToggle,
 }: MatchCardProps) {
-  const [expanded, setExpanded] = useState(false);
+  // 부모가 쥐지 않으면 예전처럼 스스로 든다 — 다른 화면에서 그냥 쓸 수 있게 남긴다.
+  const [selfExpanded, setSelfExpanded] = useState(false);
+  const expanded = expandedProp ?? selfExpanded;
+  const toggle = onToggle ?? (() => setSelfExpanded((prev) => !prev));
   const variant = VARIANT[placementVariant];
   const canExpand = Boolean(expandedContent);
 
@@ -136,7 +156,7 @@ export default function MatchCard({
                 variant="secondary"
                 size="sm"
                 aria-expanded={expanded}
-                onClick={() => setExpanded((prev) => !prev)}
+                onClick={toggle}
               >
                 상세보기
                 <ChevronDown

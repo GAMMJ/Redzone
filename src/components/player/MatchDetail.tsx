@@ -1,26 +1,47 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { Trophy } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import { formatMapName, formatSurvival, gameModeFullLabel } from "@/lib/pubg/matchLabels";
 import { mainWeaponOf } from "@/lib/pubg/telemetry";
 import MatchLog from "@/components/player/MatchLog";
+import { useListScrollRestore } from "@/hooks/useListScrollRestore";
+import { playerPath } from "@/lib/paths";
 import { toMatchTeams } from "@/lib/pubg/matchTeams";
 import type { MatchTeam, MatchTeamMember } from "@/lib/pubg/matchTeams";
+
 import type { MatchResponse, ParticipantStats } from "@/types/match";
 import type { MatchTelemetry } from "@/types/telemetry";
 
+/** 갈 곳을 미리 붙인 참가자. `href`가 null이면 누를 수 없다(봇·본인·모르는 계정). */
+type LinkedMember = MatchTeamMember & { href: string | null };
+type LinkedTeam = Omit<MatchTeam, "members"> & { members: LinkedMember[] };
+
 interface MatchDetailProps {
+  /** 전적 링크를 만들 때 쓴다 */
+  platform: string;
   match: MatchResponse;
   playerId: string;
   stats: ParticipantStats;
+  /**
+   * 보고 있는 탭. 카드 펼침과 마찬가지로 부모가 쥔다.
+   *
+   * 남의 프로필에 다녀오면 이 컴포넌트가 언마운트돼 로컬 state는 사라진다.
+   * 부모(RecentMatches)가 떠나는 순간에만 적어 두었다가 뒤로 왔을 때 한 번 되살린다.
+   *
+   * 주소(쿼리)에 담는 방법은 쓰지 않는다 — 새로고침해도 남아 카드가 열린 채 뜨고,
+   * 상세를 다시 부르느라 PUBG 호출까지 쓴다. 한 번 시도했다가 되물린 방식이다.
+   */
+  tab: DetailTab;
+  onTabChange: (next: DetailTab) => void;
   /** 텔레메트리 요약. 아직 안 왔거나 실패하면 undefined — 그 칸만 비운다. */
   telemetry?: MatchTelemetry;
 }
 
-type DetailTab = "team" | "all" | "log";
+export type DetailTab = "team" | "all" | "log";
 
 // 상단 요약 — 매치 API stats에 텔레메트리에서만 나오는 둘(주무기·받은 피해)을 더한다.
 // 텔레메트리가 없으면 그 두 칸만 "—"로 두고 나머지는 그대로 그린다.
@@ -98,19 +119,17 @@ function ColumnHeader() {
   );
 }
 
-function PlayerRow({ member, rank }: { member: MatchTeamMember; rank: number }) {
-  const { name, isTarget } = member;
-  return (
-    <div
-      className={`flex items-center gap-2 border-b border-hairline px-4 py-2.5 ${
-        isTarget ? "bg-primary-soft" : "bg-surface"
-      }`}
-    >
+function PlayerRow({ member, rank }: { member: LinkedMember; rank: number }) {
+  const { name, isTarget, isBot, href } = member;
+
+  const row = (
+    <>
       <span className="w-4 shrink-0 text-center text-xs font-medium text-text-tertiary">
         <span className="sr-only">팀 내 </span>
         {rank}
       </span>
-      <Avatar alt={name} size="sm" />
+      {/* 기본 헬멧 이미지 하나뿐이라 알릴 정보가 없다. 이름을 넣으면 닉네임이 두 번 읽힌다 */}
+      <Avatar size="sm" />
       <span className="flex min-w-[110px] flex-1 items-center gap-1.5 truncate">
         <span
           className={`truncate text-caption font-semibold ${
@@ -119,7 +138,20 @@ function PlayerRow({ member, rank }: { member: MatchTeamMember; rank: number }) 
         >
           {name}
         </span>
-        {isTarget && <span className="shrink-0 text-[11px] font-bold text-primary">(나)</span>}
+        {/* 괄호는 낭독에서 생략될 수 있어 "나"·"봇"이 이름에 그대로 붙어버린다.
+            눈으로 보는 것과 읽히는 것을 나눠 둔다 — 위 칸 라벨과 같은 방식이다. */}
+        {isTarget && (
+          <span className="shrink-0 text-[11px] font-bold text-primary">
+            <span className="sr-only">나 </span>
+            <span aria-hidden="true">(나)</span>
+          </span>
+        )}
+        {isBot && (
+          <span className="shrink-0 text-[11px] font-medium text-text-tertiary">
+            <span className="sr-only">봇 </span>
+            <span aria-hidden="true">(봇)</span>
+          </span>
+        )}
       </span>
       {COLUMNS.map((c) => (
         <span
@@ -135,11 +167,30 @@ function PlayerRow({ member, rank }: { member: MatchTeamMember; rank: number }) 
           {c.get(member)}
         </span>
       ))}
-    </div>
+    </>
   );
+
+  const shared = `flex items-center gap-2 border-b border-hairline px-4 py-2.5 ${
+    isTarget ? "bg-primary-soft" : "bg-surface"
+  }`;
+
+  // 행 전체를 누를 수 있게 한다 — 랭킹 표(RankingTable)가 같은 방식이다.
+  if (href !== null) {
+    return (
+      <Link href={href} className={`${shared} transition-colors hover:bg-surface-subtle`}>
+        {row}
+        {/* aria-label로 이름을 대체하면 위 칸별 sr-only 라벨("킬 3" 등)이 접근 가능한 이름에서
+            통째로 밀려난다. 무엇이 남는지는 스크린리더·모드마다 달라 장담할 수 없다.
+            이 파일이 이미 쓰는 방식대로 실제 텍스트를 덧붙이면 어디서든 이어서 읽힌다. */}
+        <span className="sr-only">전적 보기</span>
+      </Link>
+    );
+  }
+
+  return <div className={shared}>{row}</div>;
 }
 
-function TeamGroup({ team, isMyTeam }: { team: MatchTeam; isMyTeam: boolean }) {
+function TeamGroup({ team, isMyTeam }: { team: LinkedTeam; isMyTeam: boolean }) {
   const tag = placementTag(team.rank);
   return (
     <div>
@@ -187,7 +238,7 @@ function TeamGroup({ team, isMyTeam }: { team: MatchTeam; isMyTeam: boolean }) {
         </div>
       </div>
       {team.members.map((m, i) => (
-        <PlayerRow key={m.name} member={m} rank={i + 1} />
+        <PlayerRow key={m.playerId} member={m} rank={i + 1} />
       ))}
     </div>
   );
@@ -201,11 +252,14 @@ const LEGEND = [
 ];
 
 // 참가자 표 래퍼 — 세로로 길면 표 안에서 스크롤(max-h) + 헤더 sticky 고정. 컬럼이 많아 가로로도 스크롤한다.
-function RankTable({ children }: { children: ReactNode }) {
+function RankTable({ children, scrollKey }: { children: ReactNode; scrollKey: string }) {
+  // 이 상자가 스크롤된다. 문서 스크롤과 달리 브라우저가 되돌려 주지 않는다.
+  const ref = useListScrollRestore<HTMLDivElement>(scrollKey);
   return (
     // 스크롤되는 영역은 초점을 받을 수 있어야 키보드로 움직일 수 있다.
     // region + 이름이 있어야 스크린리더가 "참가자 기록 영역"으로 안내한다.
     <div
+      ref={ref}
       role="region"
       aria-label="참가자 기록"
       tabIndex={0}
@@ -220,7 +274,7 @@ function RankTable({ children }: { children: ReactNode }) {
 }
 
 // 팀 전적 — 우리 팀 요약(순위·킬합산·딜량합산·평균 이동거리) + 우리 팀원만
-function TeamRecord({ team }: { team: MatchTeam }) {
+function TeamRecord({ team, matchId }: { team: LinkedTeam; matchId: string }) {
   const avgMoveKm = team.members.length
     ? (team.members.reduce((s, m) => s + m.moveDistanceM, 0) / team.members.length / 1000).toFixed(2)
     : "0";
@@ -243,9 +297,9 @@ function TeamRecord({ team }: { team: MatchTeam }) {
         ))}
       </div>
 
-      <RankTable>
+      <RankTable scrollKey={`${matchId}:team`}>
         {team.members.map((m, i) => (
-          <PlayerRow key={m.name} member={m} rank={i + 1} />
+          <PlayerRow key={m.playerId} member={m} rank={i + 1} />
         ))}
       </RankTable>
     </div>
@@ -258,11 +312,35 @@ const TABS: { value: DetailTab; label: string }[] = [
   { value: "log", label: "로그" },
 ];
 
-export default function MatchDetail({ match, playerId, stats, telemetry }: MatchDetailProps) {
-  const [tab, setTab] = useState<DetailTab>("team");
+export default function MatchDetail({
+  match,
+  playerId,
+  platform,
+  stats,
+  telemetry,
+  tab,
+  onTabChange,
+}: MatchDetailProps) {
+  const matchId = match.data.id;
   const attr = match.data.attributes;
   // 참가자 100명 Map 생성 + 로스터 정렬 + 팀별 정렬이라 탭을 누를 때마다 다시 돌 이유가 없다.
-  const teams = useMemo(() => toMatchTeams(match, playerId), [match, playerId]);
+  // 링크 경로를 여기서 한 번에 붙인다.
+  //
+  // 아래 컴포넌트들은 platform으로 할 일이 없는데도 PlayerRow까지 넘겨주기만 하느라
+  // 다섯 겹을 타고 내려갔다. 갈 곳이 정해진 값으로 바꿔 두면 중간이 알 필요가 없어진다.
+  const teams = useMemo(
+    () =>
+      toMatchTeams(match, playerId).map((team) => ({
+        ...team,
+        members: team.members.map((member) => ({
+          ...member,
+          // 실제 계정이면서 내가 아닐 때만 갈 곳이 있다
+          href:
+            member.linkable && !member.isTarget ? playerPath(platform, member.name) : null,
+        })),
+      })),
+    [match, playerId, platform],
+  );
   const isWin = stats.winPlace === 1;
   const mapLabel = formatMapName(attr.mapName);
   const modeLabel = gameModeFullLabel(attr.gameMode);
@@ -282,7 +360,7 @@ export default function MatchDetail({ match, playerId, stats, telemetry }: Match
           </p>
         );
       }
-      return <TeamRecord team={myTeam} />;
+      return <TeamRecord team={myTeam} matchId={matchId} />;
     }
 
     if (tab === "log") {
@@ -319,9 +397,13 @@ export default function MatchDetail({ match, playerId, stats, telemetry }: Match
             ))}
           </div>
         </div>
-        <RankTable>
+        <RankTable scrollKey={`${matchId}:all`}>
           {teams.map((team) => (
-            <TeamGroup key={team.teamId} team={team} isMyTeam={team.teamId === myTeamId} />
+            <TeamGroup
+              key={team.teamId}
+              team={team}
+              isMyTeam={team.teamId === myTeamId}
+            />
           ))}
         </RankTable>
       </div>
@@ -362,10 +444,10 @@ export default function MatchDetail({ match, playerId, stats, telemetry }: Match
           <button
             key={t.value}
             type="button"
-            // role="tab"을 쓰면 화살표 키 이동까지 갖춰야 한다(APG). 여기선 버튼 두 개뿐이라
+            // role="tab"을 쓰면 화살표 키 이동까지 갖춰야 한다(APG). 여기선 버튼 셋뿐이라
             // 토글 버튼 패턴(aria-pressed)으로 선택 상태만 정확히 전달한다.
             aria-pressed={tab === t.value}
-            onClick={() => setTab(t.value)}
+            onClick={() => onTabChange(t.value)}
             className={`flex-1 rounded-sm py-2 text-sm font-semibold transition-colors ${
               tab === t.value
                 ? "bg-surface text-text-primary shadow-xs"
