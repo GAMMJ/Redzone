@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Dropdown from "@/components/ui/Dropdown";
-import TierLabel from "@/components/ui/TierLabel";
+import TierBadge from "@/components/ui/TierBadge";
 import SectionHeading from "./SectionHeading";
 import ModeStatCard from "./ModeStatCard";
 import LoadFailure from "@/components/ui/LoadFailure";
@@ -42,16 +42,11 @@ interface ModeStatsProps {
   seasonFailed?: boolean;
 }
 
-// 경쟁전 카드 부제 — 티어 + RP
+// 경쟁전 카드 중앙 — 티어 아이콘 + 티어명 + RP
 function TierSubtitle({ ranked }: { ranked: RankedGameModeStats }) {
   const tier = ranked.currentTier;
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm">
-      <TierLabel tier={tier.tier} subTier={tier.subTier} className="font-semibold text-text-primary" />
-      <span className="font-mono font-bold text-primary">
-        {ranked.currentRankPoint.toLocaleString()} RP
-      </span>
-    </span>
+    <TierBadge tier={tier.tier} subTier={tier.subTier} rankPoint={ranked.currentRankPoint} />
   );
 }
 
