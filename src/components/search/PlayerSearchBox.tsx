@@ -59,12 +59,14 @@ const VARIANT: Record<SearchVariant, VariantStyle> = {
 // 상태·제출은 usePlayerSearchBox 훅으로 공유하고, 레이아웃 차이만 variant로 분기.
 // 입력 포커스 시 최근 검색 드롭다운을 띄우고, 외부 클릭·Esc·항목 선택 시 닫는다.
 export default function PlayerSearchBox({ variant }: { variant: SearchVariant }) {
-  const { platform, setPlatform, query, setQuery, handleSubmit, searchWith } =
+  const { platform, setPlatform, query, setQuery, error, handleSubmit, searchWith } =
     usePlayerSearchBox();
   const s = VARIANT[variant];
 
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const errorId = `search-error-${variant}`;
 
   // 검색창 바깥 클릭 시 최근 검색 드롭다운 닫기
   useEffect(() => {
@@ -89,7 +91,8 @@ export default function PlayerSearchBox({ variant }: { variant: SearchVariant })
         onSubmit={(event) => {
           event.preventDefault();
           setOpen(false);
-          handleSubmit();
+          // 못 보냈으면 고칠 자리로 초점을 돌려준다 — 문구만 띄우고 두면 어디를 고칠지 모른다.
+          if (!handleSubmit()) inputRef.current?.focus();
         }}
         className={`flex items-center rounded-lg transition-colors ${s.form}`}
       >
@@ -106,8 +109,11 @@ export default function PlayerSearchBox({ variant }: { variant: SearchVariant })
         <div className={s.inputWrap}>
           <Search className={`shrink-0 text-text-tertiary ${s.iconClass}`} />
           <input
+            ref={inputRef}
             type="search"
             aria-label="플레이어 닉네임"
+            aria-invalid={error !== null}
+            aria-describedby={error ? errorId : undefined}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onFocus={() => setOpen(true)}
@@ -131,6 +137,13 @@ export default function PlayerSearchBox({ variant }: { variant: SearchVariant })
           </Button>
         )}
       </form>
+
+      {/* role=alert이라 초점을 옮기지 않아도 스크린리더가 바로 읽는다 */}
+      {error && (
+        <p id={errorId} role="alert" className="mt-1.5 px-1 text-caption text-danger">
+          {error}
+        </p>
+      )}
 
       {open && (
         <RecentSearches

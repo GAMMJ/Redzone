@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCw } from "lucide-react";
 import Button from "@/components/ui/Button";
@@ -29,11 +29,20 @@ function readRemaining(key: string): number {
 interface UpdateButtonProps {
   platform: string;
   name: string;
+  /**
+   * 방금 그린 화면이 실패한 값으로 채워졌는가.
+   *
+   * `router.refresh()`는 성공·실패를 돌려주지 않는다. 대신 갱신이 끝난 뒤 새로 내려온 이 값을
+   * 보면 결과를 알 수 있다 — 실패한 채로 돌아왔다면 대기를 걸지 않는다.
+   * 실패했을 때야말로 다시 눌러야 하는데 그때 잠기는 것이 이 버튼의 가장 나쁜 점이었다.
+   */
+  loadFailed?: boolean;
 }
 
-export default function UpdateButton({ platform, name }: UpdateButtonProps) {
+export default function UpdateButton({ platform, name, loadFailed = false }: UpdateButtonProps) {
   const router = useRouter();
   const [remaining, setRemaining] = useState(0);
+  const [refreshing, startTransition] = useTransition();
   const key = storageKey(platform, name);
 
   useEffect(() => {
@@ -49,14 +58,32 @@ export default function UpdateButton({ platform, name }: UpdateButtonProps) {
     };
   }, [key]);
 
-  function handleUpdate() {
+  // 갱신이 끝난 뒤에 대기를 건다.
+  //
+  // 예전에는 누르자마자 걸었다. router.refresh()는 결과를 돌려주지 않으니 실패해도 대기가
+  // 남았고, 사용자는 5분간 다시 누를 수 없었다 — 실패했을 때야말로 다시 눌러야 하는데.
+  //
+  // transition이 끝나면 새 화면이 이미 그려져 있으므로 loadFailed가 이번 결과를 말해 준다.
+  // 실패한 채로 돌아왔으면 대기를 걸지 않아 곧바로 다시 누를 수 있다.
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (!startedRef.current || refreshing) return;
+    startedRef.current = false;
+    if (loadFailed) return;
     try {
       window.localStorage.setItem(key, String(Date.now()));
     } catch {
-      // 저장에 실패해도 갱신은 진행한다. 새로고침하면 대기가 풀릴 뿐이다.
+      // 저장에 실패해도 갱신 자체는 끝났다. 새로고침하면 대기가 풀릴 뿐이다.
     }
-    setRemaining(COOLDOWN_SECONDS);
-    router.refresh();
+    // 위 sync 타이머가 1초 안에 같은 값을 계산해 내지만, 그 사이 버튼이 잠깐 열려 있어
+    // 두 번 눌릴 수 있다. 곧바로 반영하되 렌더 중 상태 변경이 되지 않게 한 프레임 미룬다.
+    const id = requestAnimationFrame(() => setRemaining(COOLDOWN_SECONDS));
+    return () => cancelAnimationFrame(id);
+  }, [refreshing, loadFailed, key]);
+
+  function handleUpdate() {
+    startedRef.current = true;
+    startTransition(() => router.refresh());
   }
 
   const waiting = remaining > 0;
@@ -66,10 +93,12 @@ export default function UpdateButton({ platform, name }: UpdateButtonProps) {
       variant="secondary"
       size="md"
       icon={RotateCw}
-      disabled={waiting}
+      // 갱신이 도는 동안에도 막는다. 연달아 누르면 같은 요청이 겹쳐 한도만 쓴다.
+      disabled={waiting || refreshing}
       onClick={handleUpdate}
     >
-      {waiting ? `${remaining}초 후 가능` : "전적 업데이트"}
+      {/* 누르고 1~3초간 아무 반응이 없으면 고장으로 읽힌다 */}
+      {refreshing ? "업데이트 중" : waiting ? `${remaining}초 후 가능` : "전적 업데이트"}
     </Button>
   );
 }

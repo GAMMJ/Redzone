@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Home, SearchX } from "lucide-react";
 import Container from "@/components/layout/Container";
 import LinkButton from "@/components/ui/LinkButton";
 import { PLATFORM_LABEL, isPlatform } from "@/lib/constants";
+import { useRecentSearchStore } from "@/store/recentSearchStore";
 
 // not-found.tsx는 params를 받지 못해 경로에서 직접 읽는다: /player/{platform}/{name}
 // 잘못된 플랫폼으로 들어온 경우(isValidShard 실패)도 이 화면이라 platform은 유효성 검사 후 쓴다.
@@ -33,6 +35,17 @@ const HINTS = [
 
 export default function PlayerNotFound() {
   const { platform, name } = useSearchedPlayer();
+  const removeRecent = useRecentSearchStore((state) => state.remove);
+
+  // 없는 닉네임을 최근 검색에서 지운다.
+  //
+  // 검색은 존재 여부를 미리 알 수 없다 — 조회가 곧 이동이라, 여기 도착해서야 없는 줄 안다.
+  // 그래서 검색 시점에 적어 두고 없으면 이 화면이 도로 지운다. 안 그러면 오타 한 번이
+  // 목록에 계속 남아, 지우는 방법을 아는 사람만 치울 수 있다.
+  useEffect(() => {
+    if (!platform || !name) return;
+    removeRecent(name, platform);
+  }, [platform, name, removeRecent]);
 
   return (
     <Container className="flex flex-col items-center gap-8 py-20">

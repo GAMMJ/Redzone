@@ -16,7 +16,7 @@ export default async function Home() {
   return (
     <>
       {/* Hero는 흰 배경(bg-surface) 풀블리드, 이하 섹션은 페이지 배경 위 */}
-      <Hero seasonNumber={season?.number ?? null} />
+      <Hero seasonNumber={season.data?.number ?? null} />
 
       <Container className="flex flex-col gap-14 py-14">
         {/* 스팀·카카오 실시간 랭킹 반반 — 리더보드 조회는 각 카드에서 스트리밍(셸 먼저 페인트) */}

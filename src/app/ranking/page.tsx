@@ -43,7 +43,7 @@ export default async function RankingPage({
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold text-text-primary">랭킹</h1>
         <p className="text-caption text-text-secondary">
-          {season ? `시즌 ${season.number} · ` : ""}
+          {season.data ? `시즌 ${season.data.number} · ` : ""}
           {PLATFORM_LABEL[platform]} 경쟁전 상위 {RANKING_LIMIT}명
         </p>
       </div>

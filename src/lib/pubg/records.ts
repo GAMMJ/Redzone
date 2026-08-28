@@ -26,6 +26,28 @@ import {
 import { summarizeTelemetry } from "@/lib/pubg/telemetry";
 import type { MatchTelemetry } from "@/types/telemetry";
 
+/**
+ * 조회 결과와 "실패해서 이렇게 됐는가"를 함께 들고 내려온다.
+ *
+ * 빈 값으로 내려앉는 것(degrade) 자체는 옳다. 리더보드 하나 못 불러왔다고 페이지를 통째로
+ * 오류로 만들면 지금보다 나쁘다. 문제는 **빈 값만 남는 것**이다. 화면은 그것을 "없다"로밖에
+ * 읽을 수 없어, 랭크를 실제로 돌린 사람에게 "이번 시즌 기록 없음"이라고 단정하게 된다.
+ *
+ * 실패했다는 사실을 함께 들고 내려오면 화면이 "없음"과 "못 불러옴"을 가려 말할 수 있다.
+ *
+ * `failed`를 따로 두고 `data`를 `null`로 겸용하지 않는 이유는, 이 코드에 이미 "없음"을
+ * 뜻하는 `null`이 있기 때문이다(현재 시즌이 없는 기간). 거기에 실패까지 얹으면 지금 문제를
+ * 이름만 바꿔 옮기는 셈이 된다.
+ */
+export interface Loaded<T> {
+  data: T;
+  /** true면 `data`는 실패로 인한 빈 값이다 — "없음"이 아니라 "모른다"는 뜻이다. */
+  failed: boolean;
+}
+
+const loaded = <T,>(data: T): Loaded<T> => ({ data, failed: false });
+const unavailable = <T,>(data: T): Loaded<T> => ({ data, failed: true });
+
 interface SeasonsResponse {
   data?: Array<{ id: string; attributes: { isCurrentSeason: boolean } }>;
 }
@@ -46,16 +68,17 @@ export async function getPlayerByName(shard: string, name: string): Promise<Play
   }
 }
 
-// 현재 시즌 id — 없으면 null. seasons 캐시키는 라우트와 통일(30분).
-export async function getCurrentSeasonId(shard: string): Promise<string | null> {
+// 현재 시즌 id — 진행 중인 시즌이 없으면 data가 null, 조회 실패면 failed.
+// seasons 캐시키는 라우트와 통일(30분).
+export async function getCurrentSeasonId(shard: string): Promise<Loaded<string | null>> {
   try {
     const res = await fetchPubgCached<SeasonsResponse>(shard, "seasons", {}, 1800, {
       cacheKey: `season:list:${shard}`,
     });
-    return res.data?.find((season) => season.attributes.isCurrentSeason)?.id ?? null;
+    return loaded(res.data?.find((season) => season.attributes.isCurrentSeason)?.id ?? null);
   } catch {
-    // 시즌 조회 실패(429·네트워크 등)는 티어 생략으로 degrade — 헤더 자체는 렌더
-    return null;
+    // 실패(429·네트워크 등)해도 헤더 자체는 렌더한다. 다만 "시즌이 없다"고 말하지는 않는다.
+    return unavailable(null);
   }
 }
 
@@ -65,52 +88,55 @@ function parseSeasonNumber(id: string): number {
   return matched ? Number(matched[1]) : 0;
 }
 
-// 현재 시즌 id + 번호 — 홈 시즌 배지/부제용. 없거나 실패 시 null.
+// 현재 시즌 id + 번호 — 홈 시즌 배지/부제용. 진행 중인 시즌이 없으면 data가 null.
 export async function getCurrentSeason(
   shard: string,
-): Promise<{ id: string; number: number } | null> {
-  const id = await getCurrentSeasonId(shard);
-  if (!id) return null;
-  return { id, number: parseSeasonNumber(id) };
+): Promise<Loaded<{ id: string; number: number } | null>> {
+  const season = await getCurrentSeasonId(shard);
+  if (!season.data) return { data: null, failed: season.failed };
+  return loaded({ id: season.data, number: parseSeasonNumber(season.data) });
 }
 
 // 플레이어 랭크 스탯(모드별) — 플레이한 모드만 키로 존재.
-// seasonId가 null(시즌 조회 실패)이면 호출부가 분기하지 않도록 여기서 빈 값으로 degrade한다.
+//
+// 시즌을 통째로 받는 이유는 실패가 전염되기 때문이다. 시즌 조회가 실패해 id를 모르면
+// 이 스탯도 "없다"가 아니라 "모른다"다. id만 넘기면 호출부가 그 구분을 따로 이어 붙여야 하고,
+// 한 곳만 빠뜨려도 화면이 다시 "기록 없음"이라고 단정한다.
 export async function getPlayerRanked(
   shard: string,
   playerId: string,
-  seasonId: string | null,
-): Promise<Partial<Record<RankedGameMode, RankedGameModeStats>>> {
-  if (!seasonId) return {};
+  season: Loaded<string | null>,
+): Promise<Loaded<Partial<Record<RankedGameMode, RankedGameModeStats>>>> {
+  if (season.failed) return unavailable({});
+  if (!season.data) return loaded({}); // 진행 중인 시즌이 없다 — 이건 실제로 "없음"이다
   try {
     const res = await fetchPubgCached<PlayerRankedResponse>(
       shard,
-      `players/${playerId}/seasons/${seasonId}/ranked`,
+      `players/${playerId}/seasons/${season.data}/ranked`,
     );
-    return res.data?.attributes?.rankedGameModeStats ?? {};
+    return loaded(res.data?.attributes?.rankedGameModeStats ?? {});
   } catch {
-    // 랭크 조회 실패(429·네트워크 등)는 티어 생략으로 degrade
-    return {};
+    return unavailable({});
   }
 }
 
 // 플레이어 일반전 시즌 스탯(모드별) — 안 한 모드도 0값으로 내려올 수 있음.
-// seasonId가 null이면 랭크 쪽과 같은 이유로 빈 값으로 degrade한다.
+// 시즌을 통째로 받는 이유는 랭크 쪽과 같다.
 export async function getPlayerSeason(
   shard: string,
   playerId: string,
-  seasonId: string | null,
-): Promise<Partial<Record<GameMode, SeasonStats>>> {
-  if (!seasonId) return {};
+  season: Loaded<string | null>,
+): Promise<Loaded<Partial<Record<GameMode, SeasonStats>>>> {
+  if (season.failed) return unavailable({});
+  if (!season.data) return loaded({});
   try {
     const res = await fetchPubgCached<PlayerSeasonResponse>(
       shard,
-      `players/${playerId}/seasons/${seasonId}`,
+      `players/${playerId}/seasons/${season.data}`,
     );
-    return res.data?.attributes?.gameModeStats ?? {};
+    return loaded(res.data?.attributes?.gameModeStats ?? {});
   } catch {
-    // 시즌 스탯 조회 실패(429·네트워크 등)는 일반전 카드 생략으로 degrade
-    return {};
+    return unavailable({});
   }
 }
 
@@ -178,17 +204,19 @@ function toLeaderboardEntries(raw: unknown, limit: number): LeaderboardEntry[] {
   return entries;
 }
 
-// 현재 시즌 리더보드 상위 limit개(정제본). 미지원 플랫폼·조회 실패 시 빈 배열로 degrade.
+// 현재 시즌 리더보드 상위 limit개(정제본).
+// 미지원 플랫폼은 빈 배열(실제로 없음), 조회 실패는 failed로 구분한다.
 export async function getLeaderboard(
   platform: string,
   gameMode: GameMode,
   seasonId: string,
   limit: number = DEFAULT_LEADERBOARD_LIMIT,
-): Promise<LeaderboardEntry[]> {
+): Promise<Loaded<LeaderboardEntry[]>> {
   const region = LEADERBOARD_REGION[platform];
-  if (!region) return [];
+  // 콘솔은 아직 매핑이 없다. 못 불러온 게 아니라 우리가 아직 안 하는 것이라 실패가 아니다.
+  if (!region) return loaded([]);
   try {
-    return await fetchPubgCached<LeaderboardEntry[]>(
+    const entries = await fetchPubgCached<LeaderboardEntry[]>(
       region,
       `leaderboards/${seasonId}/${gameMode}`,
       {},
@@ -199,9 +227,10 @@ export async function getLeaderboard(
         transform: (raw) => toLeaderboardEntries(raw, limit),
       },
     );
+    return loaded(entries);
   } catch {
-    // 리더보드 조회 실패(429·네트워크 등)는 빈 목록으로 degrade
-    return [];
+    // 실패해도 페이지는 그린다. 다만 빈 목록을 "랭킹이 없다"로 읽히게 두지는 않는다.
+    return unavailable([]);
   }
 }
 

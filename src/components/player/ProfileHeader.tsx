@@ -9,9 +9,16 @@ interface ProfileHeaderProps {
   platform: string;
   // 스쿼드 랭크가 있으면 티어·RP 표시 (없으면 생략)
   rankedStat?: RankedGameModeStats;
+  /** 이번 렌더가 실패한 값으로 채워졌는가 — 업데이트 버튼이 대기를 걸지 판단한다. */
+  loadFailed?: boolean;
 }
 
-export default function ProfileHeader({ player, platform, rankedStat }: ProfileHeaderProps) {
+export default function ProfileHeader({
+  player,
+  platform,
+  rankedStat,
+  loadFailed = false,
+}: ProfileHeaderProps) {
   const name = player.attributes.name;
   const validPlatform = isPlatform(platform) ? platform : null;
   const PlatformIcon = validPlatform ? PLATFORM_ICON[validPlatform] : null;
@@ -39,7 +46,7 @@ export default function ProfileHeader({ player, platform, rankedStat }: ProfileH
           )}
         </div>
       </div>
-      <UpdateButton platform={platform} name={name} />
+      <UpdateButton platform={platform} name={name} loadFailed={loadFailed} />
     </div>
   );
 }

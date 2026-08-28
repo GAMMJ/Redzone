@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import Spinner from "@/components/ui/Spinner";
+import LoadFailure from "@/components/ui/LoadFailure";
 import Pagination from "@/components/ui/Pagination";
 import MatchCard from "@/components/match/MatchCard";
 import MatchDetail from "@/components/player/MatchDetail";
@@ -13,6 +14,7 @@ import { useMatch, useMatchSummaries, useTelemetry } from "@/hooks/useMatch";
 import { useDocumentScrollRestore } from "@/hooks/useDocumentScrollRestore";
 import { rememberReturnState, useReturnState } from "@/hooks/useReturnState";
 import { keepAnchored, opensElsewhere } from "@/lib/viewRestore";
+import { failureMessage } from "@/lib/rateLimit";
 import { RECENT_MATCHES_PAGE_SIZE as PER_PAGE } from "@/lib/pubg/matchConstants";
 import {
   formatSurvival,
@@ -80,7 +82,7 @@ function MatchDetailLoader({
   tab: DetailTab;
   onTabChange: (next: DetailTab) => void;
 }) {
-  const { data, isPending, isError } = useMatch(shard, matchId, true);
+  const { data, isPending, isError, isFetching, refetch, error } = useMatch(shard, matchId, true);
 
   // 텔레메트리는 부가 정보라 매치 상세와 나란히 요청하고 기다리지 않는다.
   // 늦게 와도 주 무기·받은 피해 칸만 나중에 채워진다.
@@ -95,7 +97,8 @@ function MatchDetailLoader({
   }
 
   // MatchResponse는 런타임 검증 없이 캐스팅된 값이라, included가 없으면 상세를 그리다 throw한다.
-  // 아직 app/error.tsx가 없어서 그 throw 하나가 프로필 페이지 전체를 날린다.
+  // app/error.tsx가 받아 주긴 하지만 그 throw 하나로 프로필 페이지 전체가 오류 화면이 되므로,
+  // 여기서 모양을 확인해 이 카드 안에서만 실패로 처리한다.
   const stats =
     !isError && data !== undefined && Array.isArray(data.included)
       ? findPlayerStats(data, playerId)
@@ -103,9 +106,16 @@ function MatchDetailLoader({
 
   if (data === undefined || stats === null) {
     return (
-      <p className="rounded-lg border border-hairline bg-surface py-8 text-center text-caption text-text-tertiary">
-        매치 상세를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
-      </p>
+      <div className="rounded-lg border border-hairline bg-surface">
+        <LoadFailure
+          // 한도 초과면 몇 초 뒤에 되는지 알려 준다 — 프록시가 내려보내는 값을 여태 버리고 있었다.
+          message={failureMessage(error, "매치 상세")}
+          // 서버 렌더가 아니라 이 조회만 다시 부른다. 카드를 접었다 펴는 걸
+          // 사용자가 스스로 알아내게 두지 않는다.
+          onRetry={() => void refetch()}
+          pending={isFetching}
+        />
+      </div>
     );
   }
 
@@ -209,6 +219,8 @@ export default function RecentMatches({
     data: summaries,
     isLoading,
     isPlaceholderData,
+    isFetching: summariesFetching,
+    refetch: refetchSummaries,
   } = useMatchSummaries(
     shard,
     playerId,
@@ -317,9 +329,12 @@ export default function RecentMatches({
       ) : (
         <>
           {missingCount > 0 && (
-            <p className="text-caption text-text-tertiary">
-              이 페이지의 매치 {missingCount}건을 불러오지 못했습니다
-            </p>
+            <LoadFailure
+              inline
+              message={`이 페이지의 매치 ${missingCount}건을 불러오지 못했습니다`}
+              onRetry={() => void refetchSummaries()}
+              pending={summariesFetching}
+            />
           )}
           {/* 카드 사이 간격(gap-3)은 헤더→첫 카드 간격(gap-4)과 별도로 유지 */}
           {/* 전환 중에는 이전 페이지 카드가 그대로 남으므로 흐리게 해 아직 갱신 전임을 알린다 */}
