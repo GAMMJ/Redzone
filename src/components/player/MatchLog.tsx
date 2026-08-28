@@ -290,7 +290,11 @@ function LogRow({
     >
       {/* 지도 마커에 찍힌 번호와 같은 값이다. 좌표가 없는 항목은 비워 두되 칸은 남긴다 */}
       <span className="w-6 shrink-0 text-right text-[11px] text-text-tertiary">{order}</span>
-      <span className="w-11 shrink-0 text-text-tertiary">{formatClock(entry.at)}</span>
+      {/* truncate가 붙어 있어야 한다. 폭이 고정인데 넘치는 값이 들어오면 옆 칸을 덮는다 —
+          시각이 소수점째 찍히던 동안 배지와 닉네임 위에 숫자 꼬리가 겹쳐 보였다.
+          지금은 formatClock이 내림해 짧지만, 값이 짧다는 전제를 칸이 붙들고 있으면 안 된다.
+          무기·거리·부위 칸은 이미 같은 이유로 truncate가 붙어 있다. */}
+      <span className="w-11 shrink-0 truncate text-text-tertiary">{formatClock(entry.at)}</span>
 
       <span
         className={`w-9 shrink-0 rounded-sm py-0.5 text-center text-[11px] font-bold ${KIND_STYLE[entry.kind]}`}
