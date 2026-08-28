@@ -1,6 +1,6 @@
 import Avatar from "@/components/ui/Avatar";
 import UpdateButton from "@/components/player/UpdateButton";
-import TierLabel from "@/components/ui/TierLabel";
+import TierBadge from "@/components/ui/TierBadge";
 import { PLATFORM_LABEL, PLATFORM_ICON, isPlatform } from "@/lib/constants";
 import type { Player, RankedGameModeStats } from "@/types/player";
 
@@ -36,14 +36,7 @@ export default function ProfileHeader({
             {PlatformIcon && <PlatformIcon className="h-3.5 w-3.5" />}
             {platformLabel}
           </span>
-          {tier && (
-            <span className="inline-flex items-center gap-1.5 font-semibold text-text-primary">
-              <TierLabel tier={tier.tier} subTier={tier.subTier} />
-              {typeof rp === "number" && (
-                <span className="font-mono text-primary">· {rp.toLocaleString()} RP</span>
-              )}
-            </span>
-          )}
+          {tier && <TierBadge tier={tier.tier} subTier={tier.subTier} rankPoint={rp} size="sm" />}
         </div>
       </div>
       <UpdateButton platform={platform} name={name} loadFailed={loadFailed} />
