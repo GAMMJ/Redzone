@@ -25,7 +25,7 @@ export const TELEMETRY_TTL = 60 * 60 * 24 * 30;
 
 // 텔레메트리 요약 스키마 버전.
 // MatchTelemetry 모양을 바꾸면 옛 요약이 TTL 내내 그대로 나간다. 바꿀 때마다 올릴 것.
-export const TELEMETRY_SCHEMA_VERSION = "v8";
+export const TELEMETRY_SCHEMA_VERSION = "v9";
 
 // 텔레메트리는 30MB가 넘어 받고 파싱하는 데 시간이 걸린다(실측 약 420ms).
 // 기본 8초로는 빠듯할 수 있어 따로 넉넉히 잡는다.

@@ -39,10 +39,19 @@ function pointOf(value: unknown): TelemetryPoint | null {
   return { x: Math.round(toNumber(loc.x) / 100), y: Math.round(toNumber(loc.y) / 100) };
 }
 
+/**
+ * 매치 시작으로부터 흐른 초. **소수점을 남긴다.**
+ *
+ * 예전에는 초 단위로 반올림했는데, 그러면 같은 초에 일어난 기절과 킬의 값이 완전히 같아져
+ * 밀리초 순서가 사라진다. 로그는 이 값으로 정렬하므로 눕힌 것과 마무리한 것의 앞뒤가
+ * 뒤집혔다(실측: 10:47 킬이 10:47 기절보다 위).
+ *
+ * 화면에 찍을 때는 `formatClock`이 내림하므로 표시는 그대로다.
+ */
 function secondsFrom(startMs: number, iso: unknown): number {
   const t = Date.parse(toStr(iso));
   if (!Number.isFinite(t)) return 0;
-  return Math.max(0, Math.round((t - startMs) / 1000));
+  return Math.max(0, (t - startMs) / 1000);
 }
 
 // 딜량 상위 몇 개만 남긴다. 97명 전원의 모든 무기를 담으면 요약이 불필요하게 커진다.

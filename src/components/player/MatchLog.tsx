@@ -56,8 +56,18 @@ const KIND_FILTERS: { value: KindFilter; label: string }[] = [
   { value: "revive", label: "부활" },
 ];
 
+/**
+ * 시각이 같을 때의 앞뒤. 기절 → (부활 | 킬) 순이다.
+ *
+ * 부활은 눕혀진 사람에게만 일어나고, 킬도 눕힌 뒤에 마무리하는 것이라 둘 다 기절 뒤다.
+ * 부활과 킬은 같은 사람에게 동시에 일어날 수 없어 서로의 앞뒤는 뜻이 없다.
+ */
+const CAUSAL_ORDER: Record<LogEntry["kind"], number> = { groggy: 0, revive: 1, kill: 2 };
+
+// at은 정렬을 위해 소수점을 갖는다(telemetry.ts의 secondsFrom 참고). 표시할 때는 버린다.
 function formatClock(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
 interface MatchLogProps {
@@ -116,7 +126,12 @@ export default function MatchLog({ telemetry, mapName, playerName, teamNames }: 
         target: r.victim,
       })),
     ];
-    return merged.sort((a, b) => a.at - b.at);
+    // 시각이 같으면 인과 순서로 가른다. 눕힌 다음에 마무리하므로 기절이 먼저다.
+    //
+    // 소수점을 남긴 뒤에는 같은 값이 나오는 일이 거의 없지만, 캐시에 남아 있는 옛 요약은
+    // 초 단위로 반올림돼 있어 여전히 겹친다. 그리고 sort는 안정 정렬이라 값이 같으면
+    // 넣은 순서(킬 → 기절 → 부활)가 그대로 남아, 하필 킬이 위로 간다.
+    return merged.sort((a, b) => a.at - b.at || CAUSAL_ORDER[a.kind] - CAUSAL_ORDER[b.kind]);
   }, [telemetry]);
 
   const team = useMemo(() => new Set(teamNames), [teamNames]);
