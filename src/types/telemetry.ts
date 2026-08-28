@@ -32,6 +32,15 @@ export interface TelemetryGroggy {
   distanceM: number;
   /** 킬과 마찬가지로 부위가 기록된다. 없으면 빈 문자열 */
   bodyPart: string;
+  /**
+   * 눕힌 자리. 킬과 같은 규칙으로 가해자 위치를 먼저 쓴다.
+   *
+   * 원본에는 처음부터 실려 있었는데(실측: 한 매치 73건 전부, 가해자·피해자 양쪽 다)
+   * 우리가 이름만 꺼내고 있었다. 그래서 기절 줄은 지도에 찍히지 않았고, 눌러도 아무 일도
+   * 일어나지 않았다.
+   */
+  attackerAt: TelemetryPoint | null;
+  victimAt: TelemetryPoint;
 }
 
 export interface TelemetryRevive {

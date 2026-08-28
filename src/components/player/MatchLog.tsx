@@ -29,7 +29,7 @@ interface LogEntry {
   /** 0이면 표시하지 않는다 — 가해자 없는 죽음은 거리가 없다 */
   distanceM?: number;
   bodyPart?: string;
-  /** 지도에 찍을 위치. 킬에만 있다. */
+  /** 지도에 찍을 위치. 킬·기절에 있고 부활에는 없다(원본이 좌표를 주지 않는다). */
   at2d?: TelemetryPoint | null;
 }
 
@@ -56,8 +56,18 @@ const KIND_FILTERS: { value: KindFilter; label: string }[] = [
   { value: "revive", label: "부활" },
 ];
 
+/**
+ * 시각이 같을 때의 앞뒤. 기절 → (부활 | 킬) 순이다.
+ *
+ * 부활은 눕혀진 사람에게만 일어나고, 킬도 눕힌 뒤에 마무리하는 것이라 둘 다 기절 뒤다.
+ * 부활과 킬은 같은 사람에게 동시에 일어날 수 없어 서로의 앞뒤는 뜻이 없다.
+ */
+const CAUSAL_ORDER: Record<LogEntry["kind"], number> = { groggy: 0, revive: 1, kill: 2 };
+
+// at은 정렬을 위해 소수점을 갖는다(telemetry.ts의 secondsFrom 참고). 표시할 때는 버린다.
 function formatClock(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
 interface MatchLogProps {
@@ -107,6 +117,8 @@ export default function MatchLog({ telemetry, mapName, playerName, teamNames }: 
         cause: g.weapon,
         distanceM: g.distanceM,
         bodyPart: g.bodyPart,
+        // 킬과 같은 규칙 — 가해자 위치를 먼저 쓴다.
+        at2d: g.attackerAt ?? g.victimAt,
       })),
       ...telemetry.revives.map((r, i) => ({
         id: `r${i}`,
@@ -116,7 +128,12 @@ export default function MatchLog({ telemetry, mapName, playerName, teamNames }: 
         target: r.victim,
       })),
     ];
-    return merged.sort((a, b) => a.at - b.at);
+    // 시각이 같으면 인과 순서로 가른다. 눕힌 다음에 마무리하므로 기절이 먼저다.
+    //
+    // 소수점을 남긴 뒤에는 같은 값이 나오는 일이 거의 없지만, 캐시에 남아 있는 옛 요약은
+    // 초 단위로 반올림돼 있어 여전히 겹친다. 그리고 sort는 안정 정렬이라 값이 같으면
+    // 넣은 순서(킬 → 기절 → 부활)가 그대로 남아, 하필 킬이 위로 간다.
+    return merged.sort((a, b) => a.at - b.at || CAUSAL_ORDER[a.kind] - CAUSAL_ORDER[b.kind]);
   }, [telemetry]);
 
   const team = useMemo(() => new Set(teamNames), [teamNames]);
@@ -129,8 +146,9 @@ export default function MatchLog({ telemetry, mapName, playerName, teamNames }: 
   });
 
   // 지도에 찍을 것은 좌표가 있는 항목뿐이고, 번호는 그 마커와 목록을 잇는 용도다.
-  // 좌표가 없는 기절·부활에는 번호를 주지 않는다 — 주면 다음 마커의 번호를 미리 쓰게 돼
+  // 좌표가 없는 부활에는 번호를 주지 않는다 — 주면 다음 마커의 번호를 미리 쓰게 돼
   // 같은 번호가 여러 줄에 찍힌다.
+  // (기절은 원본에 좌표가 있어 이제 함께 찍힌다. 예전에는 우리가 안 뽑아 빠져 있었다.)
   const markerOrder = new Map<string, number>();
   const markers: MapMarker[] = [];
   for (const entry of visible) {
@@ -275,7 +293,11 @@ function LogRow({
     >
       {/* 지도 마커에 찍힌 번호와 같은 값이다. 좌표가 없는 항목은 비워 두되 칸은 남긴다 */}
       <span className="w-6 shrink-0 text-right text-[11px] text-text-tertiary">{order}</span>
-      <span className="w-11 shrink-0 text-text-tertiary">{formatClock(entry.at)}</span>
+      {/* truncate가 붙어 있어야 한다. 폭이 고정인데 넘치는 값이 들어오면 옆 칸을 덮는다 —
+          시각이 소수점째 찍히던 동안 배지와 닉네임 위에 숫자 꼬리가 겹쳐 보였다.
+          지금은 formatClock이 내림해 짧지만, 값이 짧다는 전제를 칸이 붙들고 있으면 안 된다.
+          무기·거리·부위 칸은 이미 같은 이유로 truncate가 붙어 있다. */}
+      <span className="w-11 shrink-0 truncate text-text-tertiary">{formatClock(entry.at)}</span>
 
       <span
         className={`w-9 shrink-0 rounded-sm py-0.5 text-center text-[11px] font-bold ${KIND_STYLE[entry.kind]}`}
