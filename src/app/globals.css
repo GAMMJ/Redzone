@@ -39,6 +39,28 @@
   --color-place-top10-bg: #eaf1fb;
   --color-place-top10-fg: #2563a8;
 
+  /* 티어 (Tier) — 등급마다 고유색. place-*와 같은 bg/fg 짝 구조.
+     아이콘의 금속색에서 뽑아 화면에서도 등급이 색으로 먼저 읽히게 한다.
+     fg는 배경 위 본문 대비를 위해 어둡게, bg는 카드 안에서 튀지 않게 아주 옅게 잡았다. */
+  --color-tier-bronze-fg: #96562a;
+  --color-tier-bronze-bg: #f6ece3;
+  --color-tier-silver-fg: #63707d;
+  --color-tier-silver-bg: #eef1f4;
+  --color-tier-gold-fg: #a17a10;
+  --color-tier-gold-bg: #faf3de;
+  --color-tier-platinum-fg: #2f7d78;
+  --color-tier-platinum-bg: #e6f2f1;
+  --color-tier-crystal-fg: #1a7fc1;
+  --color-tier-crystal-bg: #e4f1fb;
+  --color-tier-diamond-fg: #3a55c9;
+  --color-tier-diamond-bg: #e9ecfd;
+  --color-tier-master-fg: #7a3cb8;
+  --color-tier-master-bg: #f2e9fb;
+  --color-tier-survivor-fg: #b3341c;
+  --color-tier-survivor-bg: #fbe9e5;
+  --color-tier-unranked-fg: #6f736c;
+  --color-tier-unranked-bg: #eef0ec;
+
   /* 유틸리티 */
   --color-tooltip-bg: #1f2937;
   --color-chart-bar: #c3c5bf;
