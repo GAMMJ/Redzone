@@ -29,7 +29,7 @@ interface LogEntry {
   /** 0이면 표시하지 않는다 — 가해자 없는 죽음은 거리가 없다 */
   distanceM?: number;
   bodyPart?: string;
-  /** 지도에 찍을 위치. 킬에만 있다. */
+  /** 지도에 찍을 위치. 킬·기절에 있고 부활에는 없다(원본이 좌표를 주지 않는다). */
   at2d?: TelemetryPoint | null;
 }
 
@@ -117,6 +117,8 @@ export default function MatchLog({ telemetry, mapName, playerName, teamNames }: 
         cause: g.weapon,
         distanceM: g.distanceM,
         bodyPart: g.bodyPart,
+        // 킬과 같은 규칙 — 가해자 위치를 먼저 쓴다.
+        at2d: g.attackerAt ?? g.victimAt,
       })),
       ...telemetry.revives.map((r, i) => ({
         id: `r${i}`,
@@ -144,8 +146,9 @@ export default function MatchLog({ telemetry, mapName, playerName, teamNames }: 
   });
 
   // 지도에 찍을 것은 좌표가 있는 항목뿐이고, 번호는 그 마커와 목록을 잇는 용도다.
-  // 좌표가 없는 기절·부활에는 번호를 주지 않는다 — 주면 다음 마커의 번호를 미리 쓰게 돼
+  // 좌표가 없는 부활에는 번호를 주지 않는다 — 주면 다음 마커의 번호를 미리 쓰게 돼
   // 같은 번호가 여러 줄에 찍힌다.
+  // (기절은 원본에 좌표가 있어 이제 함께 찍힌다. 예전에는 우리가 안 뽑아 빠져 있었다.)
   const markerOrder = new Map<string, number>();
   const markers: MapMarker[] = [];
   for (const entry of visible) {

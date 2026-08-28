@@ -122,6 +122,10 @@ export function summarizeTelemetry(raw: unknown): MatchTelemetry | null {
           weapon: causeName(toStr(event.damageTypeCategory), toStr(event.damageCauserName)),
           distanceM: Math.round(toNumber(event.distance) / 100),
           bodyPart: toStr(event.damageReason),
+          // 킬과 같은 규칙 — "어디서 쐈나"가 "어디서 눕었나"보다 읽기 쉽다.
+          // 자기장·낙사로 눕는 경우는 가해자가 없어 피해자 위치로 떨어진다.
+          attackerAt: pointOf(event.attacker),
+          victimAt: pointOf(event.victim) ?? { x: 0, y: 0 },
         });
         break;
       }
