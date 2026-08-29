@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Search } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Dropdown from "@/components/ui/Dropdown";
+import Spinner from "@/components/ui/Spinner";
 import RecentSearches from "@/components/search/RecentSearches";
 import { PLATFORMS, PLATFORM_LABEL, PLATFORM_ICON } from "@/lib/constants";
 import type { Platform } from "@/lib/constants";
@@ -81,7 +82,7 @@ export default function PlayerSearchBox({
   /** 검색 결과로 갈 곳. 안 주면 전적 페이지. */
   to?: SearchTarget;
 }) {
-  const { platform, setPlatform, query, setQuery, error, handleSubmit, searchWith } =
+  const { platform, setPlatform, query, setQuery, error, pending, handleSubmit, searchWith } =
     usePlayerSearchBox("steam", DESTINATION[to]);
   const s = VARIANT[variant];
 
@@ -148,14 +149,22 @@ export default function PlayerSearchBox({
         </div>
 
         {s.button && (
+          // 누른 티를 낸다. 목적지가 서버 컴포넌트라 화면이 바뀌기까지 몇 초 걸리는데,
+          // 그동안 버튼이 멀쩡하면 안 먹은 줄 알고 다시 누른다 — 호출만 더 쓴다.
           <Button
             type="submit"
             size="lg"
-            icon={ArrowRight}
+            icon={pending ? undefined : ArrowRight}
             iconPosition="right"
+            disabled={pending}
             className="h-full w-[130px]"
           >
-            검색
+            {/* 주황 배경 위라 스피너 기본색(primary)이 묻힌다 — 글자와 같은 색으로 돌린다 */}
+            {pending ? (
+              <Spinner size="sm" className="border-text-primary/30 border-t-text-primary" />
+            ) : (
+              "검색"
+            )}
           </Button>
         )}
       </form>
