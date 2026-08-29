@@ -7,7 +7,8 @@ import Dropdown from "@/components/ui/Dropdown";
 import RecentSearches from "@/components/search/RecentSearches";
 import { PLATFORMS, PLATFORM_LABEL, PLATFORM_ICON } from "@/lib/constants";
 import type { Platform } from "@/lib/constants";
-import { usePlayerSearchBox } from "@/hooks/usePlayerSearchBox";
+import { usePlayerSearchBox, type SearchDestination } from "@/hooks/usePlayerSearchBox";
+import { playerPath, statsPath } from "@/lib/paths";
 
 type SearchVariant = "hero" | "compact";
 
@@ -58,9 +59,30 @@ const VARIANT: Record<SearchVariant, VariantStyle> = {
 // 플레이어 검색창 — 메인(hero)·헤더(compact) 공통 컴포넌트.
 // 상태·제출은 usePlayerSearchBox 훅으로 공유하고, 레이아웃 차이만 variant로 분기.
 // 입력 포커스 시 최근 검색 드롭다운을 띄우고, 외부 클릭·Esc·항목 선택 시 닫는다.
-export default function PlayerSearchBox({ variant }: { variant: SearchVariant }) {
+/**
+ * 검색 결과로 갈 곳.
+ *
+ * **함수가 아니라 문자열이다.** 서버 컴포넌트는 클라이언트 컴포넌트에 함수를 넘길 수 없다
+ * ("Functions cannot be passed directly to Client Components"). 목적지를 함수로 받으면
+ * 통계 페이지(서버 컴포넌트)에서 이 검색창을 못 쓴다.
+ */
+type SearchTarget = "player" | "stats";
+
+const DESTINATION: Record<SearchTarget, SearchDestination> = {
+  player: playerPath,
+  stats: (platform, name) => statsPath(platform, name),
+};
+
+export default function PlayerSearchBox({
+  variant,
+  to = "player",
+}: {
+  variant: SearchVariant;
+  /** 검색 결과로 갈 곳. 안 주면 전적 페이지. */
+  to?: SearchTarget;
+}) {
   const { platform, setPlatform, query, setQuery, error, handleSubmit, searchWith } =
-    usePlayerSearchBox();
+    usePlayerSearchBox("steam", DESTINATION[to]);
   const s = VARIANT[variant];
 
   const [open, setOpen] = useState(false);
