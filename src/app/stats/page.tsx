@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Container from "@/components/layout/Container";
 import PlayerSearchBox from "@/components/search/PlayerSearchBox";
 import LoadFailure from "@/components/ui/LoadFailure";
 import StatsTabs, { parseTab } from "@/components/stats/StatsTabs";
 import PersonalStats, { parseMode } from "@/components/stats/PersonalStats";
+import PersonalStatsSkeleton from "@/components/stats/PersonalStatsSkeleton";
 import {
   getPlayerByName,
   getLifetime,
@@ -92,8 +94,27 @@ export default async function StatsPage({
         <Notice>
           <p className="text-caption text-text-tertiary">동접자 통계는 준비 중입니다</p>
         </Notice>
+      ) : !name ? (
+        <Notice>
+          <p className="text-caption text-text-tertiary">닉네임을 검색하면 통계가 나옵니다</p>
+        </Notice>
+      ) : !isValidShard(platform) ? (
+        <Notice>
+          <p className="text-caption text-text-tertiary">지원하지 않는 플랫폼입니다</p>
+        </Notice>
       ) : (
-        <StatsBody platform={platform} name={name} mode={mode} hrefForMode={hrefForMode} />
+        // 조회를 Suspense 안에 두어 기다리는 동안 뼈대를 보여 준다.
+        //
+        // 이 페이지 한 번이 PUBG 호출 4회라 몇 초가 걸린다. 그동안 화면이 그대로면 사용자는
+        // 검색이 안 먹은 줄 알고 다시 누르고, 그만큼 호출을 또 쓴다.
+        //
+        // key에 조회를 가르는 값을 전부 넣는다. 넣지 않으면 같은 경로 안에서 검색어나 모드만
+        // 바뀔 때 경계가 그대로라 뼈대가 다시 뜨지 않는다 — 랭킹이 platform을 key로 쓰는 것과
+        // 같은 이유다. 검색 전 안내는 여기 밖에 둔다. 안 그러면 아직 검색도 안 했는데
+        // 뼈대가 한 번 번쩍인다.
+        <Suspense key={`${platform}:${name}:${mode}`} fallback={<StatsLoading />}>
+          <StatsBody platform={platform} name={name} mode={mode} hrefForMode={hrefForMode} />
+        </Suspense>
       )}
     </Container>
   );
@@ -113,7 +134,18 @@ function Notice({ children }: { children: React.ReactNode }) {
   );
 }
 
-// 검색 전 · 없는 닉네임 · 한도 초과 · 정상을 각각 다르게 말한다.
+/** 기다리는 동안. 이름 자리는 결과에서 오므로 여기서는 뼈대만 잡는다. */
+function StatsLoading() {
+  return (
+    <div className="flex flex-col gap-4">
+      <span className="block h-6 w-40 animate-pulse rounded-sm bg-hairline" />
+      <PersonalStatsSkeleton />
+    </div>
+  );
+}
+
+// 없는 닉네임 · 한도 초과 · 정상을 각각 다르게 말한다.
+// 검색 전·잘못된 플랫폼은 조회가 필요 없어 호출부에서 먼저 가른다.
 async function StatsBody({
   platform,
   name,
@@ -125,21 +157,6 @@ async function StatsBody({
   mode: GameMode;
   hrefForMode: (mode: GameMode) => string;
 }) {
-  if (!name) {
-    return (
-      <Notice>
-        <p className="text-caption text-text-tertiary">닉네임을 검색하면 통계가 나옵니다</p>
-      </Notice>
-    );
-  }
-  if (!isValidShard(platform)) {
-    return (
-      <Notice>
-        <p className="text-caption text-text-tertiary">지원하지 않는 플랫폼입니다</p>
-      </Notice>
-    );
-  }
-
   // 한도 초과는 오류 경계로 넘기지 않는다 — 서버 오류는 digest만 내려와 몇 초 뒤에 되는지
   // 알 수 없다. 여기서는 Retry-After가 손에 있으니 그 자리에서 말해 준다.
   let result: Awaited<ReturnType<typeof loadStats>>;
