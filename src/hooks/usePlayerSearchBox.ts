@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Platform } from "@/lib/constants";
 import { playerPath } from "@/lib/paths";
@@ -25,6 +25,15 @@ export function usePlayerSearchBox(
   const [platform, setPlatform] = useState<Platform>(initialPlatform);
   const [query, setQuery] = useState("");
 
+  /**
+   * 이동이 끝날 때까지 참.
+   *
+   * 목적지가 서버 컴포넌트라 화면이 바뀌기 전에 서버가 조회를 마쳐야 한다. 통계는 한 번에
+   * PUBG 호출 4회라 몇 초가 걸리는데, 그동안 버튼이 멀쩡하면 사용자는 검색이 안 먹은 줄 알고
+   * 다시 누른다. 다시 누르면 호출을 또 쓰고, 분당 한도가 10회라 한도에 더 빨리 부딪힌다.
+   */
+  const [pending, startTransition] = useTransition();
+
   // 빈 입력으로 눌렀을 때 아무 일도 안 일어나면 사용자는 검색이 고장 난 것으로 본다.
   // 왜 안 되는지 말해 주고, 호출부가 입력란에 초점을 돌려줄 수 있게 결과를 알려 준다.
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +50,7 @@ export function usePlayerSearchBox(
     // 존재 여부는 이동해 봐야 알 수 있다(조회가 곧 이동이다). 없는 닉네임이면 프로필의
     // not-found 화면이 이 기록을 도로 지운다 — 오타가 목록에 남지 않게.
     addRecent(trimmed, target);
-    router.push(destination(target, trimmed));
+    startTransition(() => router.push(destination(target, trimmed)));
     return true;
   }
 
@@ -61,6 +70,7 @@ export function usePlayerSearchBox(
     query,
     setQuery: changeQuery,
     error,
+    pending,
     handleSubmit,
     searchWith,
   };
