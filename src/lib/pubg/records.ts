@@ -12,6 +12,9 @@ import type {
 } from "@/types/player";
 import type { LeaderboardEntry } from "@/types/leaderboard";
 import type { MatchSummary } from "@/types/match";
+import type { LifetimeResponse, LifetimeStats, SurvivalMastery, WeaponMastery } from "@/types/stats";
+import { LIFETIME_SCHEMA_VERSION, LIFETIME_TTL, MASTERY_TTL } from "@/lib/pubg/statsConstants";
+import { summarizeWeaponMastery, WEAPON_MASTERY_SCHEMA_VERSION } from "@/lib/pubg/weaponMastery";
 import { isValidMatchId } from "@/lib/pubg/matchId";
 import {
   MATCH_BATCH_TIMEOUT,
@@ -407,5 +410,94 @@ export async function getMatchTelemetry(
   } catch {
     // 네트워크·타임아웃·형태 불일치는 상세에서 텔레메트리 구역만 생략하고 넘어간다
     return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 통계 페이지 (통산 · 무기 · 생존)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 통산 스탯(모드별).
+ *
+ * 시즌과 달리 시즌 id가 필요 없다 — 경로가 `seasons/lifetime`으로 고정이다.
+ * 그래서 시즌 조회 실패가 여기까지 번지지 않는다.
+ */
+export async function getLifetime(
+  shard: string,
+  playerId: string,
+): Promise<Loaded<Partial<Record<GameMode, LifetimeStats>>>> {
+  try {
+    const res = await fetchPubgCached<LifetimeResponse>(
+      shard,
+      `players/${playerId}/seasons/lifetime`,
+      {},
+      LIFETIME_TTL,
+      { cacheKey: `lifetime:${LIFETIME_SCHEMA_VERSION}:${shard}:${playerId}` },
+    );
+    return loaded(res.data?.attributes?.gameModeStats ?? {});
+  } catch {
+    return unavailable({});
+  }
+}
+
+/**
+ * 무기 숙련도 — XP 상위 몇 종만.
+ *
+ * 원본은 59종을 주는데 transform으로 줄여서 캐시한다. 줄이는 규칙은 weaponMastery.ts에 있다.
+ */
+export async function getWeaponMastery(
+  shard: string,
+  playerId: string,
+): Promise<Loaded<WeaponMastery[]>> {
+  try {
+    const list = await fetchPubgCached<WeaponMastery[]>(
+      shard,
+      `players/${playerId}/weapon_mastery`,
+      {},
+      MASTERY_TTL,
+      {
+        cacheKey: `weapon-mastery:${WEAPON_MASTERY_SCHEMA_VERSION}:${shard}:${playerId}`,
+        transform: (raw) =>
+          summarizeWeaponMastery(
+            isRecord(raw) && isRecord(raw.data) && isRecord(raw.data.attributes)
+              ? raw.data.attributes.weaponSummaries
+              : null,
+          ),
+      },
+    );
+    return loaded(list);
+  } catch {
+    return unavailable([]);
+  }
+}
+
+/**
+ * 생존 마스터리.
+ *
+ * 지표 17종(stats)은 담지 않는다. 실측하면 61개 값 중 하나만 채워져 있고 나머지는 0이다
+ * — 판수 2,454인 계정과 26,013인 계정이 똑같았다. 담아 봐야 0으로 가득 찬 캐시가 된다.
+ */
+export async function getSurvivalMastery(
+  shard: string,
+  playerId: string,
+): Promise<Loaded<SurvivalMastery | null>> {
+  try {
+    const res = await fetchPubgCached<{ data?: { attributes?: unknown } }>(
+      shard,
+      `players/${playerId}/survival_mastery`,
+      {},
+      MASTERY_TTL,
+    );
+    const a = res.data?.attributes;
+    if (!isRecord(a)) return loaded(null);
+    return loaded({
+      tier: toNumber(a.tier),
+      level: toNumber(a.level),
+      xp: toNumber(a.xp),
+      totalMatchesPlayed: toNumber(a.totalMatchesPlayed),
+    });
+  } catch {
+    return unavailable(null);
   }
 }
