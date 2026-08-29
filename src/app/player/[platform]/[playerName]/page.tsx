@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Container from "@/components/layout/Container";
 import LoadFailure from "@/components/ui/LoadFailure";
+import ScrollToTop from "@/components/ui/ScrollToTop";
 import ProfileHeader from "@/components/player/ProfileHeader";
 import ModeStats from "@/components/player/ModeStats";
 import RecentMatches from "@/components/player/RecentMatches";
@@ -114,6 +115,8 @@ export default async function PlayerProfilePage({ params }: { params: Promise<Pa
         matchIds={profile.matchIds}
         initialSummaries={profile.matchSummaries}
       />
+      {/* 매치를 더 불러올수록 길어지고, 카드를 펼치면 더 길어진다 */}
+      <ScrollToTop />
     </Container>
   );
 }

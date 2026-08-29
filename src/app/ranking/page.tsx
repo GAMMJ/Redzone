@@ -4,6 +4,7 @@ import Container from "@/components/layout/Container";
 import RankingControls from "@/components/ranking/RankingControls";
 import RankingTable from "@/components/ranking/RankingTable";
 import RankingTableSkeleton from "@/components/ranking/RankingTableSkeleton";
+import ScrollToTop from "@/components/ui/ScrollToTop";
 import { parseRankingPlatform, RANKING_LIMIT } from "@/components/ranking/rankingParams";
 import { getCurrentSeason } from "@/lib/pubg/records";
 import { PLATFORM_LABEL } from "@/lib/constants";
@@ -54,6 +55,10 @@ export default async function RankingPage({
       <Suspense key={platform} fallback={<RankingTableSkeleton />}>
         <RankingTable platform={platform} season={season} />
       </Suspense>
+
+      {/* 상위 100명이 한 화면에 안 들어간다. 플랫폼을 바꾸는 컨트롤이 맨 위에 있어
+          아래를 보다가 돌아오려면 한참 올라와야 했다. */}
+      <ScrollToTop />
     </Container>
   );
 }
