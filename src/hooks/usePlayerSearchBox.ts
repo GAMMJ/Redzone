@@ -8,7 +8,18 @@ import { useRecentSearchStore } from "@/store/recentSearchStore";
 
 // 플레이어 검색 입력 상태 + 제출 로직 — Hero·헤더 검색이 공유.
 // 제출/재검색 시 공백 트림 후 빈 값이면 무시, 아니면 기록 후 프로필로 이동.
-export function usePlayerSearchBox(initialPlatform: Platform = "steam") {
+/**
+ * 검색 결과로 갈 곳. 기본은 전적 페이지다.
+ *
+ * 통계 페이지도 같은 검색창을 쓰는데 목적지가 다르다. 검색창을 통째로 복제하면 최근 검색·
+ * 빈 값 안내·포커스 처리가 두 벌이 되어 한쪽만 고쳐 어긋난다.
+ */
+export type SearchDestination = (platform: Platform, name: string) => string;
+
+export function usePlayerSearchBox(
+  initialPlatform: Platform = "steam",
+  destination: SearchDestination = playerPath,
+) {
   const router = useRouter();
   const addRecent = useRecentSearchStore((state) => state.add);
   const [platform, setPlatform] = useState<Platform>(initialPlatform);
@@ -30,7 +41,7 @@ export function usePlayerSearchBox(initialPlatform: Platform = "steam") {
     // 존재 여부는 이동해 봐야 알 수 있다(조회가 곧 이동이다). 없는 닉네임이면 프로필의
     // not-found 화면이 이 기록을 도로 지운다 — 오타가 목록에 남지 않게.
     addRecent(trimmed, target);
-    router.push(playerPath(target, trimmed));
+    router.push(destination(target, trimmed));
     return true;
   }
 
