@@ -171,6 +171,14 @@ export async function getOnlinePlayers(): Promise<OnlinePlayers | null> {
 
   const parsed = parseOnlinePlayers(await fetchJsonWithTimeout(CHARTS_URL, TIMEOUT));
   if (!parsed) {
+    // 내가 실패하는 사이 다른 요청이 성공했을 수 있다. 그 값을 덮지 않고 그대로 쓴다.
+    //
+    // 실패 표시가 성공값과 같은 키에 앉으므로, 확인 없이 쓰면 늦게 실패한 요청이 먼저
+    // 성공한 요청의 스냅샷을 지운다. 스팀이 멀쩡한데도 1분간 실패 화면이 뜨고, 화면의
+    // "다시 시도"까지 죽는다 — 그 버튼도 이 표시를 읽고 곧장 돌아서기 때문이다.
+    const fresh = await readCachedValue<unknown>(CACHE_KEY);
+    if (isOnlinePlayers(fresh)) return fresh;
+
     await writeCachedValue(CACHE_KEY, { failedAt: Date.now() }, FAIL_TTL);
     return null;
   }
@@ -179,12 +187,10 @@ export async function getOnlinePlayers(): Promise<OnlinePlayers | null> {
   //
   // 이름은 없어도 되는 값이라(표가 숫자로 대신 쓴다) 접속자 숫자를 붙잡게 두지 않는다.
   // 스토어가 굼뜬 날 이름 열 개를 기다리다 헤드라인까지 같이 늦어질 이유가 없다.
-  const names = await Promise.race([
-    getAppNames(parsed.top.map((row) => row.appid)),
-    new Promise<Map<number, string>>((resolve) =>
-      setTimeout(() => resolve(new Map()), NAME_BUDGET),
-    ),
-  ]);
+  const result = await withBudget(getAppNames(parsed.top.map((row) => row.appid)), NAME_BUDGET);
+  const overBudget = result === OVER_BUDGET;
+  const names = overBudget ? new Map<number, string>() : result;
+
   const named: OnlinePlayers = {
     ...parsed,
     top: parsed.top.map((row) => {
@@ -193,6 +199,37 @@ export async function getOnlinePlayers(): Promise<OnlinePlayers | null> {
     }),
   };
 
-  await writeCachedValue(CACHE_KEY, named, TTL);
+  // 이름을 못 붙인 채로 5분을 굳히지 않는다. 스토어가 잠깐 굼떴을 뿐인데 그 대가로 표가
+  // 5분 내내 숫자만 보여 줄 이유가 없다.
+  //
+  // "이름이 비었나"가 아니라 "예산을 넘겼나"로 가른다. 스토어 페이지가 내려간 게임은 이름이
+  // 영영 안 잡히는데, 그걸 비었다고 보면 TTL이 영구히 1분으로 떨어져 스팀 호출이 다섯 배가 된다.
+  await writeCachedValue(CACHE_KEY, named, overBudget ? FAIL_TTL : TTL);
   return named;
+}
+
+/** 예산을 넘겼다는 표시. 이름이 하나도 없는 것과는 다른 사건이라 값으로 구분한다. */
+const OVER_BUDGET = Symbol("over-budget");
+
+/**
+ * 정해진 시간 안에 못 끝내면 기다리기를 그만둔다.
+ *
+ * 이긴 쪽이 누구든 타이머를 끈다. 안 끄면 평상시(캐시 히트라 수십 ms)에도 예산만큼 타이머가
+ * 남아 아무도 안 기다리는 프라미스를 깨운다 — `fetchJson`에서 막은 것과 같은 새는 구멍이다.
+ *
+ * 진 쪽은 뒤에서 계속 돈다. 그쪽은 던지지 않고(내부가 전부 catch) 결과를 캐시에 남기므로,
+ * 다음 갱신 때 이미 받아 둔 이름을 쓰게 된다.
+ */
+async function withBudget<T>(work: Promise<T>, ms: number): Promise<T | typeof OVER_BUDGET> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<typeof OVER_BUDGET>((resolve) => {
+        timer = setTimeout(() => resolve(OVER_BUDGET), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
