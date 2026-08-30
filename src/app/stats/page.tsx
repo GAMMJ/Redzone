@@ -6,6 +6,7 @@ import LoadFailure from "@/components/ui/LoadFailure";
 import StatsTabs, { parseTab } from "@/components/stats/StatsTabs";
 import PersonalStats, { parseMode } from "@/components/stats/PersonalStats";
 import PersonalStatsSkeleton from "@/components/stats/PersonalStatsSkeleton";
+import OnlinePlayers from "@/components/stats/OnlinePlayers";
 import {
   getPlayerByName,
   getLifetime,
@@ -91,9 +92,11 @@ export default async function StatsPage({
       </div>
 
       {tab === "online" ? (
-        <Notice>
-          <p className="text-caption text-text-tertiary">동접자 통계는 준비 중입니다</p>
-        </Notice>
+        // 개인 통계와 달리 검색어가 없어 탭을 열자마자 조회가 시작된다.
+        // 스팀 호출 한 번(캐시 5분)이라 대개 금방이지만, 느릴 때 빈 자리가 남지 않게 감싼다.
+        <Suspense fallback={<OnlineLoading />}>
+          <OnlinePlayers />
+        </Suspense>
       ) : !name ? (
         <Notice>
           <p className="text-caption text-text-tertiary">닉네임을 검색하면 통계가 나옵니다</p>
@@ -130,6 +133,20 @@ function Notice({ children }: { children: React.ReactNode }) {
   return (
     <div className="mx-auto w-full max-w-[720px] rounded-lg border border-hairline bg-surface p-10 text-center">
       {children}
+    </div>
+  );
+}
+
+/** 동접자를 기다리는 동안. 숫자 두 개짜리 화면이라 상자와 자리만 잡아 둔다. */
+function OnlineLoading() {
+  return (
+    <div
+      role="status"
+      aria-label="접속자 수 불러오는 중"
+      className="mx-auto flex w-full max-w-[720px] flex-col items-center gap-5 rounded-lg border border-hairline bg-surface p-10"
+    >
+      <span className="block h-10 w-48 animate-pulse rounded-sm bg-hairline" />
+      <span className="block h-6 w-28 animate-pulse rounded-pill bg-hairline" />
     </div>
   );
 }
