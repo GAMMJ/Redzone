@@ -30,9 +30,11 @@ export default function Header() {
       <Container className="flex h-16 items-center justify-between">
         <div className="flex items-center gap-10">
           <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-primary font-mono text-[15px] font-bold text-primary-foreground">
-              R
-            </span>
+            {/* 로고는 어두운 카드를 통째로 구운 PNG다. 사이트 배경이 흰색이라 밝은 배경으로는
+                마크가 배경에 묻힌다. `next/image`는 쓰지 않는다(CLAUDE.md) — 128px짜리를
+                28px로 줄여 쓰므로 고해상도 화면에서도 또렷하고, width/height로 CLS를 막는다. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icons/logo.png" alt="" width={28} height={28} className="shrink-0" />
             <span className="font-display text-[17px] font-bold text-text-primary">
               레드존
             </span>

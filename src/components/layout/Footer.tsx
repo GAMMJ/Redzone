@@ -64,9 +64,9 @@ export default function Footer() {
         <div className="flex flex-wrap justify-between gap-8">
           <div className="w-[300px]">
             <div className="flex items-center gap-2">
-              <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] bg-primary font-mono text-sm font-bold text-primary-foreground">
-                R
-              </span>
+              {/* 헤더와 같은 마크. 크기만 다르다(26px). */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icons/logo.png" alt="" width={26} height={26} className="shrink-0" />
               <span className="font-display text-base font-bold text-text-primary">레드존</span>
             </div>
             <p className="mt-3 w-[280px] text-caption leading-normal text-text-tertiary">
