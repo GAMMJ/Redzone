@@ -3,11 +3,16 @@ import LoadFailure from "@/components/ui/LoadFailure";
 import type { Loaded } from "@/lib/pubg/records";
 import { GAME_MODES, type GameMode } from "@/lib/constants";
 import type { LifetimeStats, SurvivalMastery, WeaponMastery } from "@/types/stats";
+import { formatCount, formatDistance, formatDuration } from "@/components/stats/statsFormat";
+import { LIFETIME_GROUPS, WEAPON_COLUMNS, type Unit } from "@/components/stats/lifetimeFields";
 
-// 1단계 화면 — 꾸미지 않고 값만 그대로 보여 준다.
+// 개인 통계 화면.
 //
-// 목적은 "데이터가 화면까지 닿는가"와 "어떤 필드가 비어 오는가"를 드러내는 것이다.
-// 디자인은 2단계에서 한다. 여기서 예쁘게 만들면 빈 값이 가려진다.
+// 통산 값은 성격별로 묶어 보여 준다. 26개를 한 격자에 평평하게 깔면 `판수`와 `수영 거리`가
+// 같은 무게로 보여, 무엇을 먼저 봐야 하는지가 화면에 없다.
+//
+// 단위는 라벨이 아니라 값이 갖는다(`statsFormat.ts`). PUBG가 초·미터를 소수점째로 주기
+// 때문에, 라벨에 `(초)`를 달고 값을 그대로 찍으면 `최장 생존 1,975.112`가 된다.
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -18,17 +23,23 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Rows({ rows }: { rows: [string, string | number][] }) {
+interface Row {
+  label: string;
+  value: string;
+  /** 0인 값. 자리는 지키되 눈에 덜 걸리게 둔다 — 0도 정보라 지우지는 않는다. */
+  muted?: boolean;
+}
+
+function Rows({ rows }: { rows: Row[] }) {
   return (
     <div className="grid grid-cols-2 gap-x-8 gap-y-2 rounded-lg border border-hairline bg-surface p-4 lg:grid-cols-4">
-      {rows.map(([label, value]) => (
+      {rows.map(({ label, value, muted }) => (
         <div key={label} className="flex items-baseline justify-between gap-2">
           <span className="text-caption text-text-tertiary">{label}</span>
-          {/* 0으로만 오는 필드를 눈에 띄게 둔다 — 2단계에서 무엇을 버릴지의 근거다 */}
           <span
-            className={`font-mono text-sm ${value === 0 ? "text-text-tertiary" : "font-bold text-text-primary"}`}
+            className={`font-mono text-sm ${muted ? "text-text-tertiary" : "font-bold text-text-primary"}`}
           >
-            {typeof value === "number" ? value.toLocaleString() : value}
+            {value}
           </span>
         </div>
       ))}
@@ -53,34 +64,11 @@ export function parseMode(raw: string | undefined): GameMode {
   return (GAME_MODES as readonly string[]).includes(raw ?? "") ? (raw as GameMode) : DEFAULT_MODE;
 }
 
-const LIFETIME_LABEL: [keyof LifetimeStats, string][] = [
-  ["roundsPlayed", "판수"],
-  ["wins", "승리"],
-  ["losses", "패배"],
-  ["top10s", "Top 10"],
-  ["days", "플레이한 날"],
-  ["kills", "킬"],
-  ["assists", "어시스트"],
-  ["dBNOs", "기절시킴"],
-  ["headshotKills", "헤드샷 킬"],
-  ["damageDealt", "누적 딜량"],
-  ["longestKill", "최장 킬(m)"],
-  ["roundMostKills", "한 판 최다 킬"],
-  ["maxKillStreaks", "최다 연속 킬"],
-  ["teamKills", "팀킬"],
-  ["roadKills", "차량 킬"],
-  ["suicides", "자살"],
-  ["timeSurvived", "누적 생존(초)"],
-  ["longestTimeSurvived", "최장 생존(초)"],
-  ["revives", "부활시킴"],
-  ["walkDistance", "도보(m)"],
-  ["rideDistance", "탑승(m)"],
-  ["swimDistance", "수영(m)"],
-  ["vehicleDestroys", "차량 파괴"],
-  ["heals", "회복 사용"],
-  ["boosts", "부스트 사용"],
-  ["weaponsAcquired", "주운 무기"],
-];
+function formatStat(value: number, unit: Unit = "count"): string {
+  if (unit === "duration") return formatDuration(value);
+  if (unit === "distance") return formatDistance(value);
+  return formatCount(value);
+}
 
 interface PersonalStatsProps {
   lifetime: Loaded<Partial<Record<GameMode, LifetimeStats>>>;
@@ -134,7 +122,20 @@ export default function PersonalStats({
               ))}
             </div>
             {stats ? (
-              <Rows rows={LIFETIME_LABEL.map(([key, label]) => [label, stats[key]])} />
+              <div className="flex flex-col gap-4">
+                {LIFETIME_GROUPS.map((group) => (
+                  <div key={group.title} className="flex flex-col gap-2">
+                    <h3 className="text-caption font-semibold text-text-tertiary">{group.title}</h3>
+                    <Rows
+                      rows={group.fields.map((field) => ({
+                        label: field.label,
+                        value: formatStat(stats[field.key], field.unit),
+                        muted: stats[field.key] === 0,
+                      }))}
+                    />
+                  </div>
+                ))}
+              </div>
             ) : (
               <p className="rounded-lg border border-hairline bg-surface p-6 text-center text-caption text-text-tertiary">
                 이 모드는 기록이 없습니다
@@ -160,10 +161,10 @@ export default function PersonalStats({
                 여기 넷만이 실제로 채워지는 값이다. */}
             <Rows
               rows={[
-                ["레벨", survival.data.level],
-                ["레벨 티어", survival.data.tier],
-                ["XP", survival.data.xp],
-                ["누적 판수", survival.data.totalMatchesPlayed],
+                { label: "레벨", value: formatCount(survival.data.level) },
+                { label: "레벨 티어", value: formatCount(survival.data.tier) },
+                { label: "XP", value: formatCount(survival.data.xp) },
+                { label: "누적 판수", value: formatCount(survival.data.totalMatchesPlayed) },
               ]}
             />
           </>
@@ -181,18 +182,18 @@ export default function PersonalStats({
           </p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-hairline bg-surface">
-            <table className="w-full min-w-[760px] text-caption">
+            <table className="w-full min-w-[680px] text-caption">
               <thead className="border-b border-hairline text-text-tertiary">
+                {/* 열 이름은 스켈레톤과 나눠 쓴다 — 개수가 어긋나면 결과가 도착할 때 표가 튄다 */}
                 <tr>
-                  <th className="px-4 py-2 text-left font-medium">무기</th>
-                  <th className="px-4 py-2 text-right font-medium">Lv</th>
-                  <th className="px-4 py-2 text-right font-medium">XP</th>
-                  <th className="px-4 py-2 text-right font-medium">킬(전체)</th>
-                  <th className="px-4 py-2 text-right font-medium">킬(일반)</th>
-                  <th className="px-4 py-2 text-right font-medium">킬(경쟁)</th>
-                  <th className="px-4 py-2 text-right font-medium">헤드샷(일반)</th>
-                  <th className="px-4 py-2 text-right font-medium">딜량(일반)</th>
-                  <th className="px-4 py-2 text-right font-medium">최장(일반)</th>
+                  {WEAPON_COLUMNS.map((label, index) => (
+                    <th
+                      key={label}
+                      className={`px-4 py-2 font-medium ${index === 0 ? "text-left" : "text-right"}`}
+                    >
+                      {label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -200,13 +201,12 @@ export default function PersonalStats({
                   <tr key={w.code} className="border-b border-hairline last:border-0">
                     <td className="px-4 py-2 font-medium text-text-primary">{w.name}</td>
                     <td className="px-4 py-2 text-right font-mono">{w.level}</td>
-                    <td className="px-4 py-2 text-right font-mono">{w.xp.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-right font-mono">{w.total.kills}</td>
+                    <td className="px-4 py-2 text-right font-mono">{formatCount(w.xp)}</td>
                     <td className="px-4 py-2 text-right font-mono">{w.official.kills}</td>
                     <td className="px-4 py-2 text-right font-mono">{w.competitive.kills}</td>
                     <td className="px-4 py-2 text-right font-mono">{w.official.headShots}</td>
                     <td className="px-4 py-2 text-right font-mono">
-                      {w.official.damage.toLocaleString()}
+                      {formatCount(w.official.damage)}
                     </td>
                     <td className="px-4 py-2 text-right font-mono">{w.official.longest}m</td>
                   </tr>
