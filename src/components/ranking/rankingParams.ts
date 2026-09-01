@@ -1,7 +1,9 @@
 import type { Platform, GameMode } from "@/lib/constants";
 
-// 랭킹 페이지가 지원하는 플랫폼은 리더보드가 존재하는 값으로 좁힌다(steam·kakao PC).
-export type RankingPlatform = Extract<Platform, "steam" | "kakao">;
+// 랭킹 페이지가 지원하는 플랫폼은 리더보드가 존재하는 값으로 좁힌다.
+// 지금은 넷 다 있지만(pc-as · pc-kakao · xbox-na · psn-na), 플랫폼이 늘어도 리더보드가
+// 없으면 여기 넣지 않는다 — 탭은 있는데 표가 비는 화면이 된다.
+export type RankingPlatform = Extract<Platform, "steam" | "kakao" | "xbox" | "psn">;
 
 export interface RankingOption<T> {
   value: T;
@@ -11,6 +13,8 @@ export interface RankingOption<T> {
 export const RANKING_PLATFORMS: RankingOption<RankingPlatform>[] = [
   { value: "steam", label: "Steam" },
   { value: "kakao", label: "Kakao" },
+  { value: "xbox", label: "Xbox" },
+  { value: "psn", label: "PSN" },
 ];
 
 export const DEFAULT_RANKING_PLATFORM: RankingPlatform = "steam";

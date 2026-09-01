@@ -1,7 +1,7 @@
 import "server-only";
 import axios from "axios";
 import { fetchPubgCached, readCachedValue, writeCachedValue } from "@/lib/pubgProxy";
-import type { GameMode } from "@/lib/constants";
+import type { GameMode, Platform } from "@/lib/constants";
 import type {
   Player,
   PlayerRankedResponse,
@@ -143,11 +143,21 @@ export async function getPlayerSeason(
   }
 }
 
-// PUBG 리더보드는 일반 shard(steam 등)로는 400(ShardID 누락)이라 리전 shard를 요구한다.
-// steam은 한국 리더보드가 비어 아시아(pc-as)로, kakao는 pc-kakao로 매핑. console은 후속.
-const LEADERBOARD_REGION: Record<string, string> = {
+/**
+ * 리더보드가 받는 shard는 따로다.
+ *
+ * `players`·`seasons`는 platform shard(`steam`·`xbox`)를 받지만, 리더보드에 같은 값을 넣으면
+ * **400**이다. 문서가 "deprecated"라 적어 둔 platform-region 형태만 리더보드를 준다
+ * (`docs/local/findings/pubg-shards.md` 실측).
+ *
+ * 리전은 하나씩 고정한다. steam은 한국 리더보드가 비어 아시아(`pc-as`)를 쓴다. 콘솔은
+ * NA·EU·SA만 있고 AS·OC는 404라 NA로 잡았다. 리전 선택은 화면이 붙는 별건이다.
+ */
+const LEADERBOARD_REGION: Partial<Record<Platform, string>> = {
   steam: "pc-as",
   kakao: "pc-kakao",
+  xbox: "xbox-na",
+  psn: "psn-na",
 };
 
 // getLeaderboard limit 기본값 — 홈 카드는 상위 10명, 랭킹 페이지는 100명 전달.
@@ -210,13 +220,16 @@ function toLeaderboardEntries(raw: unknown, limit: number): LeaderboardEntry[] {
 // 현재 시즌 리더보드 상위 limit개(정제본).
 // 미지원 플랫폼은 빈 배열(실제로 없음), 조회 실패는 failed로 구분한다.
 export async function getLeaderboard(
-  platform: string,
+  platform: Platform,
   gameMode: GameMode,
   seasonId: string,
   limit: number = DEFAULT_LEADERBOARD_LIMIT,
 ): Promise<Loaded<LeaderboardEntry[]>> {
   const region = LEADERBOARD_REGION[platform];
-  // 콘솔은 아직 매핑이 없다. 못 불러온 게 아니라 우리가 아직 안 하는 것이라 실패가 아니다.
+  // 리더보드가 없는 플랫폼이다. 못 불러온 게 아니라 애초에 없는 것이라 실패가 아니다.
+  //
+  // 지금은 네 플랫폼이 다 매핑돼 있어 여기 오지 않는다. 맵을 Partial로 둔 것은 리더보드가
+  // 없는 플랫폼이 생길 수 있어서고, 그때 이 줄이 받는다. 키 오타는 타입이 먼저 잡는다.
   if (!region) return loaded([]);
   try {
     const entries = await fetchPubgCached<LeaderboardEntry[]>(

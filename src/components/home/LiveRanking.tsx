@@ -7,14 +7,19 @@ import { playerPath } from "@/lib/paths";
 import { getLeaderboard, type Loaded } from "@/lib/pubg/records";
 import LoadFailure from "@/components/ui/LoadFailure";
 import { PLATFORM_LABEL } from "@/lib/constants";
-import type { Platform } from "@/lib/constants";
+import type { PcPlatform, Platform } from "@/lib/constants";
 import { LEADERBOARD_COL as COL } from "./leaderboardColumns";
 
 interface LiveRankingProps {
-  // 어느 플랫폼 리더보드인지 (steam·kakao) — 카드마다 다르게 표시
-  platform: Platform;
   /**
-   * 현재 시즌(id·번호). (steam·kakao 모두 PC 시즌 공유)
+   * 어느 플랫폼 리더보드인지 — 카드마다 다르게 표시.
+   *
+   * PC로 좁혀 둔다. 이 카드는 밖에서 받은 시즌을 그대로 쓰는데, 홈은 시즌을 한 번만
+   * 조회해 두 카드에 나눠 준다. 콘솔은 시즌 id가 달라 그 값을 같이 쓸 수 없다.
+   */
+  platform: PcPlatform;
+  /**
+   * 현재 시즌(id·번호). PC 플랫폼끼리 공유한다.
    *
    * 조회 실패(failed)와 진행 중인 시즌 없음(data가 null)은 다른 화면이 된다.
    * 실패는 리더보드 조회를 건너뛰되 "랭킹이 없다"고 말하지 않는다.

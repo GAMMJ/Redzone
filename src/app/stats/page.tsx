@@ -62,7 +62,13 @@ export default async function StatsPage({
   const params = await searchParams;
   const tab = parseTab(params.tab);
   const mode = parseMode(params.mode);
-  const platform = isPlatform(params.platform ?? "") ? (params.platform as string) : "steam";
+  // 값이 **없을 때만** 기본값을 준다. 이상한 값은 그대로 흘려보내 아래 `isValidShard` 분기가 받는다.
+  //
+  // 예전에는 모르는 값도 "steam"으로 접었는데, 그러면 조용히 다른 플랫폼을 조회한다.
+  // 지원이 끊긴 `console` 링크로 들어오면 "Steam · {닉네임}"이라고 단정하게 되고,
+  // 그 닉네임을 쓰는 Steam 계정이 실제로 있으면 **남의 전적이 그 사람 것처럼 뜬다.**
+  // 접는 쪽이 안전해 보이지만, 틀린 답을 자신 있게 말하는 것이 못 찾는 것보다 나쁘다.
+  const platform = params.platform ?? "steam";
   const name = (params.player ?? "").trim();
 
   // 탭·모드를 바꿔도 검색한 사람은 유지한다

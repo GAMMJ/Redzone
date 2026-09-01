@@ -18,7 +18,7 @@ const DEFAULT_TIMEOUT = 8000;
 const RATE_LIMIT_WARN_AT = 3;
 
 // 이 프로젝트가 지원하는 플랫폼 shard
-export const SHARDS = ["steam", "kakao", "console"] as const;
+export const SHARDS = ["steam", "kakao", "xbox", "psn"] as const;
 
 // 쿼리로 들어온 shard가 유효한 값인지 검사하는 타입 가드
 export function isValidShard(shard: unknown): shard is string {
