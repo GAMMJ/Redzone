@@ -50,7 +50,7 @@ function SegmentGroup<T extends string>({
   );
 }
 
-// 랭킹 필터 바 — 플랫폼(Steam/Kakao) 세그먼트 토글.
+// 랭킹 필터 바 — 플랫폼 세그먼트 토글(RANKING_PLATFORMS 기준).
 // 모드 토글은 두지 않는다(모드를 나눠 불러도 리더보드 값이 동일하게 내려옴).
 export default function RankingControls({ platform }: RankingControlsProps) {
   const platformHref = (value: RankingPlatform) => `/ranking?platform=${value}`;
