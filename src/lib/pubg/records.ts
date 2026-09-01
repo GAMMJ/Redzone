@@ -226,7 +226,10 @@ export async function getLeaderboard(
   limit: number = DEFAULT_LEADERBOARD_LIMIT,
 ): Promise<Loaded<LeaderboardEntry[]>> {
   const region = LEADERBOARD_REGION[platform];
-  // 콘솔은 아직 매핑이 없다. 못 불러온 게 아니라 우리가 아직 안 하는 것이라 실패가 아니다.
+  // 리더보드가 없는 플랫폼이다. 못 불러온 게 아니라 애초에 없는 것이라 실패가 아니다.
+  //
+  // 지금은 네 플랫폼이 다 매핑돼 있어 여기 오지 않는다. 맵을 Partial로 둔 것은 리더보드가
+  // 없는 플랫폼이 생길 수 있어서고, 그때 이 줄이 받는다. 키 오타는 타입이 먼저 잡는다.
   if (!region) return loaded([]);
   try {
     const entries = await fetchPubgCached<LeaderboardEntry[]>(
