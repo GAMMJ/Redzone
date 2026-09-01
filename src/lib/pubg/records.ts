@@ -13,7 +13,13 @@ import type {
 import type { LeaderboardEntry } from "@/types/leaderboard";
 import type { MatchSummary } from "@/types/match";
 import type { LifetimeResponse, LifetimeStats, SurvivalMastery, WeaponMastery } from "@/types/stats";
-import { LIFETIME_SCHEMA_VERSION, LIFETIME_TTL, MASTERY_TTL } from "@/lib/pubg/statsConstants";
+import {
+  LIFETIME_SCHEMA_VERSION,
+  LIFETIME_TTL,
+  MASTERY_TTL,
+  PLAYER_ID_TTL,
+  SEASON_STATS_TTL,
+} from "@/lib/pubg/playerConstants";
 import { summarizeWeaponMastery, WEAPON_MASTERY_SCHEMA_VERSION } from "@/lib/pubg/weaponMastery";
 import { isValidMatchId } from "@/lib/pubg/matchId";
 import {
@@ -61,9 +67,12 @@ interface PlayersResponse {
 // 닉네임으로 플레이어 조회 — 없으면 null (PUBG는 존재하지 않는 닉네임에 404를 반환)
 export async function getPlayerByName(shard: string, name: string): Promise<Player | null> {
   try {
-    const res = await fetchPubgCached<PlayersResponse>(shard, "players", {
-      "filter[playerNames]": name,
-    });
+    const res = await fetchPubgCached<PlayersResponse>(
+      shard,
+      "players",
+      { "filter[playerNames]": name },
+      PLAYER_ID_TTL,
+    );
     return res.data?.[0] ?? null;
   } catch (err) {
     if (axios.isAxiosError(err) && err.response?.status === 404) return null;
@@ -116,6 +125,8 @@ export async function getPlayerRanked(
     const res = await fetchPubgCached<PlayerRankedResponse>(
       shard,
       `players/${playerId}/seasons/${season.data}/ranked`,
+      {},
+      SEASON_STATS_TTL,
     );
     return loaded(res.data?.attributes?.rankedGameModeStats ?? {});
   } catch {
@@ -136,6 +147,8 @@ export async function getPlayerSeason(
     const res = await fetchPubgCached<PlayerSeasonResponse>(
       shard,
       `players/${playerId}/seasons/${season.data}`,
+      {},
+      SEASON_STATS_TTL,
     );
     return loaded(res.data?.attributes?.gameModeStats ?? {});
   } catch {

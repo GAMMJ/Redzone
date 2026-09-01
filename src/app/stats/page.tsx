@@ -40,7 +40,7 @@ export const metadata: Metadata = {
  * — 각 조회가 실패 여부를 함께 들고 내려오므로 화면이 "없음"과 "못 불러옴"을 가려 말한다.
  *
  * 한 번에 PUBG 호출 4회다(닉네임 조회 + 3종). 분당 한도가 10회라 캐시 TTL이 중요하다
- * (statsConstants.ts 참고).
+ * (playerConstants.ts 참고).
  */
 async function loadStats(platform: string, name: string) {
   const player = await getPlayerByName(platform, name);
