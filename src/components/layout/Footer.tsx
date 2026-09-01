@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PUBG_NEWS_URL, isExternalHref } from "@/lib/paths";
 import Container from "@/components/layout/Container";
 
 interface FooterLink {
@@ -27,8 +28,8 @@ const FOOTER_COLUMNS: FooterColumn[] = [
   {
     title: "리소스",
     links: [
-      { label: "뉴스", href: "https://pubg.com/ko/news" },
-      { label: "패치 노트", href: "https://pubg.com/ko/news?category=patch_notes" },
+      { label: "뉴스", href: PUBG_NEWS_URL },
+      { label: "패치 노트", href: `${PUBG_NEWS_URL}?category=patch_notes` },
       { label: "API 문서", href: "https://documentation.pubg.com/" },
     ],
   },
@@ -37,15 +38,14 @@ const FOOTER_COLUMNS: FooterColumn[] = [
 const LINK_CLASS = "text-caption font-normal text-text-secondary hover:text-text-primary";
 
 /**
- * 주소만 보고 안팎을 가른다.
+ * 푸터 링크 한 줄. 주소만 보고 안팎을 가른다(`isExternalHref`).
  *
- * 따로 플래그를 두면 링크를 더할 때마다 둘을 맞춰 줘야 하고, 어긋나면 사이트 안을
- * 새 탭으로 열거나 바깥을 라우터로 넘기게 된다.
+ * 바깥은 새 탭으로 열고 라우터를 태우지 않는다. 헤더도 같은 판정을 쓴다.
  */
 function FooterLinkItem({ label, href }: FooterLink) {
-  if (href.startsWith("http")) {
+  if (isExternalHref(href)) {
     return (
-      <a href={href} target="_blank" rel="noreferrer" className={LINK_CLASS}>
+      <a href={href} target="_blank" rel="noopener noreferrer" className={LINK_CLASS}>
         {label}
       </a>
     );

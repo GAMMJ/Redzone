@@ -128,6 +128,35 @@ export async function writeCachedValue(cacheKey: string, value: unknown, ttl: nu
   }
 }
 
+/**
+ * 키가 비어 있을 때만 쓴다(`SET ... NX`). **썼으면 true, 이미 뭔가 있어서 못 썼으면 false.**
+ *
+ * 한 키에 성질이 다른 두 값을 담는 자리를 위한 것이다. 조회 실패를 성공값과 같은 키에
+ * 표시해 두는 곳(`steam/*`)이 그렇다 — "먼저 읽어 보고 성공값이면 안 쓴다"로 막아 두어도
+ * 읽기와 쓰기 사이의 Redis 왕복 한 번이 창으로 남는다. 그 사이에 다른 요청이 성공값을 써
+ * 두면 늦게 실패한 쪽이 그걸 지운다. 조건을 Redis에 맡기면 창이 없다.
+ *
+ * 결과를 돌려주는 것이 요점이다. 안 돌려주면 호출부가 "내가 썼나"를 알아내려고 키를 한 번
+ * 더 읽어야 하는데, 그건 대개 헛읽기다 — 실패는 보통 키가 비어 있을 때 일어나고 그때는
+ * 이 함수가 이긴다. false일 때만 읽으면 실패 경로마다 나가던 GET 한 번이 사라진다.
+ *
+ * Redis가 없으면 false다. 못 썼다는 뜻으로는 맞지만 "남이 이겼다"는 뜻은 아니므로,
+ * 호출부는 false를 받았을 때 무엇이 있는지 실제로 확인해야 한다.
+ */
+export async function writeCachedValueIfAbsent(
+  cacheKey: string,
+  value: unknown,
+  ttl: number,
+): Promise<boolean> {
+  if (!redis) return false;
+  try {
+    return (await redis.set(cacheKey, value, { ex: ttl, nx: true })) === "OK";
+  } catch {
+    // 캐시 저장 실패는 무시 — 호출부는 이미 값을 갖고 있다
+    return false;
+  }
+}
+
 // 서버 컴포넌트/배치용 — Response가 아닌 "데이터"를 반환하는 캐시 우선 조회. 실패 시 throw.
 export async function fetchPubgCached<T = unknown>(
   shard: string,
