@@ -1,7 +1,7 @@
 import "server-only";
 import axios from "axios";
 import { fetchPubgCached, readCachedValue, writeCachedValue } from "@/lib/pubgProxy";
-import type { GameMode } from "@/lib/constants";
+import type { GameMode, Platform } from "@/lib/constants";
 import type {
   Player,
   PlayerRankedResponse,
@@ -153,7 +153,7 @@ export async function getPlayerSeason(
  * 리전은 하나씩 고정한다. steam은 한국 리더보드가 비어 아시아(`pc-as`)를 쓴다. 콘솔은
  * NA·EU·SA만 있고 AS·OC는 404라 NA로 잡았다. 리전 선택은 화면이 붙는 별건이다.
  */
-const LEADERBOARD_REGION: Record<string, string> = {
+const LEADERBOARD_REGION: Partial<Record<Platform, string>> = {
   steam: "pc-as",
   kakao: "pc-kakao",
   xbox: "xbox-na",
@@ -220,7 +220,7 @@ function toLeaderboardEntries(raw: unknown, limit: number): LeaderboardEntry[] {
 // 현재 시즌 리더보드 상위 limit개(정제본).
 // 미지원 플랫폼은 빈 배열(실제로 없음), 조회 실패는 failed로 구분한다.
 export async function getLeaderboard(
-  platform: string,
+  platform: Platform,
   gameMode: GameMode,
   seasonId: string,
   limit: number = DEFAULT_LEADERBOARD_LIMIT,

@@ -1,4 +1,4 @@
-import { Gamepad2, MessageCircle, Monitor } from "lucide-react";
+import { Gamepad, Gamepad2, MessageCircle, Monitor } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 // 콘솔은 xbox·psn platform shard로 나눠 받는다. `console` shard는 PUBG 문서상
@@ -32,11 +32,13 @@ export const PLATFORM_LABEL: Record<Platform, string> = {
   psn: "PSN",
 };
 
+// xbox·psn에 서로 다른 패드 아이콘을 준다. 같은 아이콘을 쓰면 큰 검색창 목록에서
+// 두 줄이 완전히 같아 보여, 아이콘을 붙인 이유가 절반에서 사라진다.
 export const PLATFORM_ICON: Record<Platform, LucideIcon> = {
   steam: Monitor,
   kakao: MessageCircle,
   xbox: Gamepad2,
-  psn: Gamepad2,
+  psn: Gamepad,
 };
 
 export const GAME_MODES = ["solo", "solo-fpp", "duo", "duo-fpp", "squad", "squad-fpp"] as const;
