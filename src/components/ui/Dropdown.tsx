@@ -174,13 +174,18 @@ export default function Dropdown<T extends string = string>({
               : "border-hairline-strong hover:border-text-tertiary focus-visible:border-primary"
         }`}
       >
-        <span className="flex items-center gap-2">
+        {/* min-w-0가 없으면 글자가 안 줄어들어 트리거 밖으로 삐져나가고, 옆에 붙은 검색창까지
+            밀어낸다. flex 자식은 기본이 min-width:auto라 내용보다 작아지지 않는다.
+            폭은 호출부가 정하므로(검색창은 86px), 긴 라벨은 여기서 잘라 낸다. */}
+        <span className="flex min-w-0 items-center gap-2">
           {(() => {
             const TriggerIcon = selected?.icon ?? Icon;
-            return TriggerIcon ? <TriggerIcon className={`text-text-secondary ${s.icon}`} /> : null;
+            return TriggerIcon ? (
+              <TriggerIcon className={`shrink-0 text-text-secondary ${s.icon}`} />
+            ) : null;
           })()}
           <span
-            className={`font-medium ${s.text} ${selected ? "text-text-primary" : "text-text-tertiary"}`}
+            className={`truncate font-medium ${s.text} ${selected ? "text-text-primary" : "text-text-tertiary"}`}
           >
             {selected ? selected.label : placeholder}
           </span>
