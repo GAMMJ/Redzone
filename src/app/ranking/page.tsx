@@ -36,8 +36,12 @@ export default async function RankingPage({
   const params = await searchParams;
   const platform = parseRankingPlatform(params.platform);
 
-  // steam·kakao는 PC 시즌을 공유하므로 시즌은 steam 기준으로 1회 조회
-  const season = await getCurrentSeason("steam");
+  // 시즌은 고른 플랫폼으로 조회한다.
+  //
+  // steam·kakao는 PC 시즌을 공유하지만 콘솔은 id 자체가 다르다
+  // (`division.bro.official.pc-2018-42` vs `...console-42`, findings/pubg-shards.md 실측).
+  // steam으로 고정해 두면 Xbox 리더보드에 PC 시즌 id를 넘기게 되고, 그 조합은 응답이 없다.
+  const season = await getCurrentSeason(platform);
 
   return (
     <Container className="flex flex-col gap-8 py-10">
