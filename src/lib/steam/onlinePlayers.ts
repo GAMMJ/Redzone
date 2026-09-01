@@ -4,7 +4,7 @@
 // 그래서 이 값은 영원히 "스팀 PC 기준"이다 — 카카오·콘솔은 셀 방법이 없다.
 // 화면에서 그 사실을 반드시 같이 말해야 한다.
 import "server-only";
-import { readCachedValue, writeCachedValue } from "@/lib/pubgProxy";
+import { readCachedValue, writeCachedValue, writeCachedValueIfAbsent } from "@/lib/pubgProxy";
 import { getAppNames } from "@/lib/steam/appNames";
 import { fetchJsonWithTimeout } from "@/lib/steam/fetchJson";
 
@@ -171,16 +171,19 @@ export async function getOnlinePlayers(): Promise<OnlinePlayers | null> {
 
   const parsed = parseOnlinePlayers(await fetchJsonWithTimeout(CHARTS_URL, TIMEOUT));
   if (!parsed) {
-    // 내가 실패하는 사이 다른 요청이 성공했을 수 있다. 그 값을 덮지 않고 그대로 쓴다.
+    // 내가 실패하는 사이 다른 요청이 성공했을 수 있다. 그 값을 덮지 않는다.
     //
     // 실패 표시가 성공값과 같은 키에 앉으므로, 확인 없이 쓰면 늦게 실패한 요청이 먼저
     // 성공한 요청의 스냅샷을 지운다. 스팀이 멀쩡한데도 1분간 실패 화면이 뜨고, 화면의
     // "다시 시도"까지 죽는다 — 그 버튼도 이 표시를 읽고 곧장 돌아서기 때문이다.
-    const fresh = await readCachedValue<unknown>(CACHE_KEY);
-    if (isOnlinePlayers(fresh)) return fresh;
+    //
+    // 조건은 Redis에 맡긴다. 먼저 읽어 보고 판단하면 읽기와 쓰기 사이의 왕복 한 번이
+    // 그대로 창으로 남는다 — 창이 5초에서 몇 ms로 줄 뿐 닫히지는 않는다.
+    if (await writeCachedValueIfAbsent(CACHE_KEY, { failedAt: Date.now() }, FAIL_TTL)) return null;
 
-    await writeCachedValue(CACHE_KEY, { failedAt: Date.now() }, FAIL_TTL);
-    return null;
+    // 못 썼다 = 그 자리에 이미 뭔가 있다. 성공값이면 그걸 쓴다.
+    const fresh = await readCachedValue<unknown>(CACHE_KEY);
+    return isOnlinePlayers(fresh) ? fresh : null;
   }
 
   // 이름 붙이기는 여기서 한 번만 한다. 캐시에 들어가면 그 뒤 5분은 GET 한 번으로 끝난다.
