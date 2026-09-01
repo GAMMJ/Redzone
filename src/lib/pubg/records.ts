@@ -145,9 +145,21 @@ export async function getPlayerSeason(
 
 // PUBG 리더보드는 일반 shard(steam 등)로는 400(ShardID 누락)이라 리전 shard를 요구한다.
 // steam은 한국 리더보드가 비어 아시아(pc-as)로, kakao는 pc-kakao로 매핑. console은 후속.
+/**
+ * 리더보드가 받는 shard는 따로다.
+ *
+ * `players`·`seasons`는 platform shard(`steam`·`xbox`)를 받지만, 리더보드에 같은 값을 넣으면
+ * **400**이다. 문서가 "deprecated"라 적어 둔 platform-region 형태만 리더보드를 준다
+ * (`docs/local/findings/pubg-shards.md` 실측).
+ *
+ * 리전은 하나로 고정한다. 콘솔 리더보드는 `xbox-na`·`xbox-eu`·`xbox-sa`만 있고
+ * `xbox-as`·`xbox-oc`는 404다. PC도 이미 `pc-as` 하나로 가고 있어 결이 같고,
+ * 리전 선택은 화면이 붙는 별건이다.
+ */
 const LEADERBOARD_REGION: Record<string, string> = {
   steam: "pc-as",
   kakao: "pc-kakao",
+  xbox: "xbox-na",
 };
 
 // getLeaderboard limit 기본값 — 홈 카드는 상위 10명, 랭킹 페이지는 100명 전달.
