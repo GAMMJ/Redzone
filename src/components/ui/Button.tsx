@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { FOCUS_RING } from "@/components/ui/focusRing";
 import type { UISize } from "./types";
 
 type ButtonVariant = "primary" | "secondary" | "link";
@@ -67,7 +68,7 @@ export default function Button({
       onClick={onClick}
       aria-label={ariaLabel}
       {...rest}
-      className={`${base} ${boxClass} ${variantClass} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ${className}`}
+      className={`${base} ${boxClass} ${variantClass} ${FOCUS_RING} disabled:opacity-50 disabled:pointer-events-none ${className}`}
     >
       {Icon && iconPosition === "left" && <Icon className={iconClass} />}
       {children}
