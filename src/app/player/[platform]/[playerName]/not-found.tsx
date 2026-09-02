@@ -7,6 +7,7 @@ import Container from "@/components/layout/Container";
 import LinkButton from "@/components/ui/LinkButton";
 import { PLATFORM_LABEL, isPlatform } from "@/lib/constants";
 import { useRecentSearchStore } from "@/store/recentSearchStore";
+import TrackEvent from "@/components/analytics/TrackEvent";
 
 // not-found.tsx는 params를 받지 못해 경로에서 직접 읽는다: /player/{platform}/{name}
 // 잘못된 플랫폼으로 들어온 경우(isValidShard 실패)도 이 화면이라 platform은 유효성 검사 후 쓴다.
@@ -49,6 +50,8 @@ export default function PlayerNotFound() {
 
   return (
     <Container className="flex flex-col items-center gap-8 py-20">
+      {/* 클릭이 아니라 결과라 autocapture가 영영 못 본다. 오타율과 안내 문구의 효과를 본다. */}
+      <TrackEvent event="player_not_found" properties={{ platform: platform ?? "unknown" }} />
       <div className="flex flex-col items-center gap-4 text-center">
         <span className="flex h-16 w-16 items-center justify-center rounded-pill bg-surface-muted">
           <SearchX aria-hidden className="h-8 w-8 text-text-tertiary" />
