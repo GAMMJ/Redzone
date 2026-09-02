@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RotateCw } from "lucide-react";
 import Button from "@/components/ui/Button";
+import { track } from "@/lib/analytics";
 
 // 재사용 대기 시간(초).
 //
@@ -92,6 +93,13 @@ export default function UpdateButton({ platform, name, loadFailed = false }: Upd
 
   function handleUpdate() {
     startedRef.current = true;
+
+    // 이 버튼은 검색과 똑같이 PUBG 3콜을 쓴다. autocapture가 클릭은 잡지만 버튼 글씨만
+    // 봐서는 그게 한도를 쓴 것인지 알 수 없어, 검색만 세면 실제 소비의 절반만 보게 된다.
+    //
+    // 실패해서 눌렀는지 함께 남긴다. 실패 뒤 재시도가 많다면 한도가 아니라 캐시가 문제다.
+    track("player_refreshed", { platform, after_failure: loadFailed });
+
     startTransition(() => router.refresh());
   }
 

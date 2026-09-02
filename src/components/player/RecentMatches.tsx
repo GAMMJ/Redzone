@@ -15,6 +15,7 @@ import { useDocumentScrollRestore } from "@/hooks/useDocumentScrollRestore";
 import { rememberReturnState, useReturnState } from "@/hooks/useReturnState";
 import { keepAnchored, opensElsewhere } from "@/lib/viewRestore";
 import { failureMessage } from "@/lib/rateLimit";
+import { track } from "@/lib/analytics";
 import { RECENT_MATCHES_PAGE_SIZE as PER_PAGE } from "@/lib/pubg/matchConstants";
 import {
   formatSurvival,
@@ -265,6 +266,13 @@ export default function RecentMatches({
   // 새로 펼친 카드는 언제나 첫 탭에서 연다. 카드마다 탭을 따로 들고 있던 예전 동작과 같다.
   // 탭까지 이어 두면 앞 카드에서 로그를 보다 접고 다른 카드를 열었을 때 그쪽도 로그로 열린다.
   function handleToggle(matchId: string) {
+    // 펼칠 때만 남긴다 — 접는 건 호출을 쓰지 않는다. 버튼 하나가 두 동작을 겸하니
+    // autocapture는 이 둘을 구분하지 못한다.
+    //
+    // setView 콜백 안에서 부르지 않는다. React는 개발 모드에서 상태 갱신 콜백을 두 번
+    // 돌리므로 그 안에 두면 숫자가 배가 된다.
+    if (expandedId !== matchId) track("match_expanded", { shard });
+
     setView((prev) =>
       prev.match === matchId
         ? { ...prev, match: null }
@@ -304,6 +312,10 @@ export default function RecentMatches({
   }
 
   function handlePage(next: number) {
+    // PUBG는 매치 id를 210개 내려주는데 그중 몇 개를 캐시할지는 사람들이 얼마나 깊이
+    // 보느냐에 달렸다. 그 분포를 여기서 얻는다.
+    track("matches_paged", { page: next, total_pages: totalPages });
+
     setPage(next);
     // 페이지를 옮기면 펼쳐 둔 카드는 이 페이지에 없다. 같이 접는다.
     setView({ match: null, tab: "team" });

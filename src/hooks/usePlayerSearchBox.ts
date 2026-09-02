@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Platform } from "@/lib/constants";
 import { playerPath } from "@/lib/paths";
 import { useRecentSearchStore } from "@/store/recentSearchStore";
+import { track } from "@/lib/analytics";
 
 // 플레이어 검색 입력 상태 + 제출 로직 — Hero·헤더 검색이 공유.
 // 제출/재검색 시 공백 트림 후 빈 값이면 무시, 아니면 기록 후 프로필로 이동.
@@ -50,7 +51,17 @@ export function usePlayerSearchBox(
     // 존재 여부는 이동해 봐야 알 수 있다(조회가 곧 이동이다). 없는 닉네임이면 프로필의
     // not-found 화면이 이 기록을 도로 지운다 — 오타가 목록에 남지 않게.
     addRecent(trimmed, target);
-    startTransition(() => router.push(destination(target, trimmed)));
+
+    const path = destination(target, trimmed);
+
+    // 클릭은 autocapture가 잡지만 **어느 플랫폼으로 어디를 찾았는지**는 못 본다.
+    // 닉네임은 안 보낸다 — 알고 싶은 건 횟수와 비율이지 누구를 찾았나가 아니다.
+    track("player_searched", {
+      platform: target,
+      destination: path.startsWith("/stats") ? "stats" : "player",
+    });
+
+    startTransition(() => router.push(path));
     return true;
   }
 

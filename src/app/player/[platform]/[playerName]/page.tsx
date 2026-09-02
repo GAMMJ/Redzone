@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Container from "@/components/layout/Container";
 import LoadFailure from "@/components/ui/LoadFailure";
+import TrackEvent from "@/components/analytics/TrackEvent";
 import ScrollToTop from "@/components/ui/ScrollToTop";
 import ProfileHeader from "@/components/player/ProfileHeader";
 import ModeStats from "@/components/player/ModeStats";
@@ -85,6 +86,8 @@ export default async function PlayerProfilePage({ params }: { params: Promise<Pa
     if (!isRateLimited(err)) throw err;
     return (
       <Container className="py-20">
+        {/* 한도에 몇 명이 실제로 막히는지. 한도 상향 신청의 근거가 되는 값이다. */}
+        <TrackEvent event="rate_limited" properties={{ page: "player", platform }} />
         <LoadFailure message={failureMessage(err, "전적")} />
       </Container>
     );

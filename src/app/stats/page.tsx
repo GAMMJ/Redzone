@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Container from "@/components/layout/Container";
 import PlayerSearchBox from "@/components/search/PlayerSearchBox";
 import LoadFailure from "@/components/ui/LoadFailure";
+import TrackEvent from "@/components/analytics/TrackEvent";
 import StatsTabs, { parseTab } from "@/components/stats/StatsTabs";
 import PersonalStats, { parseMode } from "@/components/stats/PersonalStats";
 import PersonalStatsSkeleton from "@/components/stats/PersonalStatsSkeleton";
@@ -189,6 +190,8 @@ async function StatsBody({
     if (!isRateLimited(err)) throw err;
     return (
       <div className="mx-auto w-full max-w-[720px] rounded-lg border border-hairline bg-surface">
+        {/* 한도에 몇 명이 실제로 막히는지. 한도 상향 신청의 근거가 되는 값이다. */}
+        <TrackEvent event="rate_limited" properties={{ page: "stats", platform }} />
         <LoadFailure message={failureMessage(err, "통계")} />
       </div>
     );
