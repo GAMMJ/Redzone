@@ -1,6 +1,11 @@
 import "server-only";
 import axios from "axios";
-import { fetchPubgCached, readCachedValue, writeCachedValue } from "@/lib/pubgProxy";
+import {
+  fetchPubgCached,
+  readCachedValue,
+  writeCachedValue,
+  type ProxyPubgOptions,
+} from "@/lib/pubgProxy";
 import type { GameMode, Platform } from "@/lib/constants";
 import type {
   Player,
@@ -13,7 +18,15 @@ import type {
 import type { LeaderboardEntry } from "@/types/leaderboard";
 import type { MatchSummary } from "@/types/match";
 import type { LifetimeResponse, LifetimeStats, SurvivalMastery, WeaponMastery } from "@/types/stats";
-import { LIFETIME_SCHEMA_VERSION, LIFETIME_TTL, MASTERY_TTL } from "@/lib/pubg/statsConstants";
+import {
+  LIFETIME_SCHEMA_VERSION,
+  LIFETIME_TTL,
+  MASTERY_TTL,
+  PLAYER_ID_SCHEMA_VERSION,
+  PLAYER_ID_TTL,
+  PLAYER_REFRESH_TTL,
+  SEASON_STATS_TTL,
+} from "@/lib/pubg/playerConstants";
 import { summarizeWeaponMastery, WEAPON_MASTERY_SCHEMA_VERSION } from "@/lib/pubg/weaponMastery";
 import { isValidMatchId } from "@/lib/pubg/matchId";
 import {
@@ -58,12 +71,57 @@ interface PlayersResponse {
   data?: Player[];
 }
 
-// 닉네임으로 플레이어 조회 — 없으면 null (PUBG는 존재하지 않는 닉네임에 404를 반환)
+/**
+ * 닉네임으로 플레이어 조회 — 없으면 null (PUBG는 존재하지 않는 닉네임에 404를 반환).
+ *
+ * **최근 매치 id가 함께 실려 온다.** PUBG엔 매치 목록 엔드포인트가 없어서 이 응답의
+ * `relationships.matches`가 최근 전적의 유일한 출처다. 그래서 이건 오래 캐시할 수 없다 —
+ * 한 판 뛰면 바뀌는 값이 같은 페이로드에 얹혀 있다.
+ *
+ * id만 필요하면 `getPlayerIdByName`을 쓸 것. 그쪽은 하루를 산다.
+ */
 export async function getPlayerByName(shard: string, name: string): Promise<Player | null> {
+  return lookupPlayer(shard, name, PLAYER_REFRESH_TTL);
+}
+
+/**
+ * 닉네임 → 계정 id. 매치 목록을 떼어 내고 하루 캐시한다.
+ *
+ * 통계 페이지처럼 최근 전적이 필요 없는 곳을 위한 것이다. 떼어 내는 것이 요점이다 —
+ * 응답이 13KB에서 250바이트로 줄고(매치 id 200여 개가 대부분이다), 무엇보다 하루 동안
+ * 얼어붙어도 곤란한 값이 남지 않는다.
+ */
+export async function getPlayerIdByName(shard: string, name: string): Promise<Player | null> {
+  return lookupPlayer(shard, name, PLAYER_ID_TTL, {
+    cacheKey: `player:id:${PLAYER_ID_SCHEMA_VERSION}:${shard}:${name}`,
+    transform: (raw) => stripMatches(raw),
+  });
+}
+
+/** 매치 관계를 뗀 응답. 담는 필드를 바꾸면 `PLAYER_ID_SCHEMA_VERSION`을 올릴 것. */
+function stripMatches(raw: unknown): PlayersResponse {
+  if (!isRecord(raw) || !Array.isArray(raw.data)) return {};
+  const players = raw.data.filter(isRecord).map(({ relationships, ...rest }) => {
+    void relationships; // 떼어 내는 것이 목적이라 쓰지 않는다
+    return rest as unknown as Player;
+  });
+  return { data: players };
+}
+
+async function lookupPlayer(
+  shard: string,
+  name: string,
+  ttl: number,
+  options?: ProxyPubgOptions,
+): Promise<Player | null> {
   try {
-    const res = await fetchPubgCached<PlayersResponse>(shard, "players", {
-      "filter[playerNames]": name,
-    });
+    const res = await fetchPubgCached<PlayersResponse>(
+      shard,
+      "players",
+      { "filter[playerNames]": name },
+      ttl,
+      options,
+    );
     return res.data?.[0] ?? null;
   } catch (err) {
     if (axios.isAxiosError(err) && err.response?.status === 404) return null;
@@ -116,6 +174,8 @@ export async function getPlayerRanked(
     const res = await fetchPubgCached<PlayerRankedResponse>(
       shard,
       `players/${playerId}/seasons/${season.data}/ranked`,
+      {},
+      SEASON_STATS_TTL,
     );
     return loaded(res.data?.attributes?.rankedGameModeStats ?? {});
   } catch {
@@ -136,6 +196,8 @@ export async function getPlayerSeason(
     const res = await fetchPubgCached<PlayerSeasonResponse>(
       shard,
       `players/${playerId}/seasons/${season.data}`,
+      {},
+      SEASON_STATS_TTL,
     );
     return loaded(res.data?.attributes?.gameModeStats ?? {});
   } catch {

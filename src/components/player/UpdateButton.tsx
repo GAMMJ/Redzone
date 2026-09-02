@@ -5,7 +5,16 @@ import { useRouter } from "next/navigation";
 import { RotateCw } from "lucide-react";
 import Button from "@/components/ui/Button";
 
-// 재사용 대기 시간(초). 프록시 캐시가 60초라 이보다 짧게 잡으면 눌러도 같은 값이 나온다.
+// 재사용 대기 시간(초).
+//
+// 갱신 대상의 캐시 TTL(`PLAYER_REFRESH_TTL` = 240초)보다 길어야 한다. 짧으면 눌러도
+// 캐시에서 같은 값이 나온다. 같게 두는 것도 안 된다 — **두 타이머의 시작점이 다르다.**
+// 이쪽은 마지막으로 누른 시각부터 세고, 캐시는 캐시가 쓰인 시각부터 센다. 내가 페이지를
+// 연 뒤 다른 사람이 같은 플레이어를 조회하면 캐시가 그때 새로 쓰여, 내 쿨다운이 풀릴 때
+// 캐시가 아직 살아 있다. 그 어긋남을 덮는 여유가 60초다.
+//
+// 값을 바꾸면 `playerConstants.ts`의 `UPDATE_COOLDOWN`도 같이 고칠 것 — 그쪽이 TTL을
+// 이 값에서 빼서 정한다. (여기 상수를 그쪽이 import할 수 없다. 이 파일은 클라이언트다.)
 const COOLDOWN_SECONDS = 300;
 
 // 마지막 갱신 시각은 플레이어별로 남긴다 — 다른 사람을 조회할 때 대기가 딸려오면 안 된다.
