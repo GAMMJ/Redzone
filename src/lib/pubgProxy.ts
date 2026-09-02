@@ -14,6 +14,12 @@ const PUBG_BASE_URL = "https://api.pubg.com";
 //
 // 필수 인자로 두면 다음에 빠뜨릴 때 컴파일이 선다. 주석으로는 못 막는다.
 
+// 실패를 기억해 두는 시간 — 5분.
+//
+// 없는 닉네임이 5분 안에 생길 일은 드물고, 생기더라도 5분 뒤엔 보인다. 길게 잡으면
+// 새 계정이 한참 "없음"으로 보이고, 짧게 잡으면 오타를 고쳐 가며 검색하는 동안 한도가 샌다.
+const FAILURE_TTL = 60 * 5;
+
 // ms — 개별 PUBG 호출 상한. 응답 없는 소켓 하나가 호출부를 무한정 붙잡지 못하게 막는 안전장치라
 // 기본값은 넉넉히 잡는다. 짧게 잡으면 평소 느린 시간대에 정상 응답까지 끊겨,
 // 닉네임 조회는 전역 에러로, 시즌 스탯은 "기록 없음"으로 둔갑한다.
@@ -89,6 +95,52 @@ async function readCache(cacheKey: string): Promise<unknown> {
   }
 }
 
+/**
+ * 캐시에서 되살린 실패. 상태 코드를 들고 다닌다.
+ *
+ * 들고 다니는 것이 요점이다. 호출부는 `err.response?.status === 404`로 "없는 닉네임"과
+ * 진짜 오류를 가리는데, 그냥 던지면 그 검사를 통과하지 못해 없는 닉네임이
+ * "찾을 수 없습니다" 대신 오류 화면이 된다.
+ */
+export class CachedPubgFailure extends Error {
+  constructor(readonly status: number) {
+    super(`PUBG ${status} (캐시된 실패)`);
+    this.name = "CachedPubgFailure";
+  }
+}
+
+/** PUBG 호출이 낸 상태 코드. 방금 받은 것이든 캐시에서 되살린 것이든 같게 읽힌다. */
+export function pubgErrorStatus(error: unknown): number | null {
+  if (error instanceof CachedPubgFailure) return error.status;
+  if (axios.isAxiosError(error)) return error.response?.status ?? null;
+  return null;
+}
+
+/** 실패 표시. 성공값과 같은 키에 담으므로 둘을 가려낼 수 있어야 한다. */
+interface FailureMark {
+  pubgFailed: number;
+}
+
+function isFailureMark(value: unknown): value is FailureMark {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as FailureMark).pubgFailed === "number"
+  );
+}
+
+/**
+ * 이 실패를 기억해 둘 것인가.
+ *
+ * **다시 물어도 같은 답이 올 것만** 담는다.
+ * - 404·400 — 없는 닉네임, 잘못된 경로. 5분 안에 생길 리 없다
+ * - 429 — 우리 한도다. 담으면 창이 열린 뒤에도 실패를 내주게 된다
+ * - 5xx·타임아웃 — 남의 사정이고 일시적이다
+ */
+function shouldRememberFailure(status: number | null): status is number {
+  return status !== null && status >= 400 && status < 500 && status !== 429;
+}
+
 // PUBG 호출 → (transform 적용) payload를 캐시에 저장하고 반환. 실패 시 throw.
 async function fetchAndStore(
   shard: string,
@@ -99,14 +151,30 @@ async function fetchAndStore(
   transform?: (raw: unknown) => unknown,
   timeout: number = DEFAULT_TIMEOUT,
 ): Promise<unknown> {
-  const response = await axios.get<unknown>(`${PUBG_BASE_URL}/shards/${shard}/${path}`, {
-    timeout,
-    headers: {
-      Authorization: `Bearer ${PUBG_API_KEY}`,
-      Accept: "application/vnd.api+json",
-    },
-    params,
-  });
+  let response;
+  try {
+    response = await axios.get<unknown>(`${PUBG_BASE_URL}/shards/${shard}/${path}`, {
+      timeout,
+      headers: {
+        Authorization: `Bearer ${PUBG_API_KEY}`,
+        Accept: "application/vnd.api+json",
+      },
+      params,
+    });
+  } catch (err) {
+    // 실패도 잠깐 기억한다. 안 그러면 같은 오타·같은 없는 계정이 매번 한도를 쓴다.
+    //
+    // 성공값과 같은 키에 담는다. 키를 따로 두면 잘 되는 동안에도 조회마다 GET이 한 번씩
+    // 더 나가 평상시 비용이 두 배가 된다 — `steam/*`가 쓰는 것과 같은 수법이다.
+    //
+    // `IfAbsent`인 이유는 내가 실패하는 사이 다른 요청이 성공했을 수 있어서다.
+    // 확인 없이 쓰면 늦게 실패한 쪽이 먼저 성공한 값을 지운다.
+    const status = pubgErrorStatus(err);
+    if (shouldRememberFailure(status)) {
+      await writeCachedValueIfAbsent(cacheKey, { pubgFailed: status }, FAILURE_TTL);
+    }
+    throw err;
+  }
   logRateLimit(shard, path, response.headers);
 
   const payload = transform ? transform(response.data) : response.data;
@@ -174,6 +242,9 @@ export async function fetchPubgCached<T = unknown>(
 ): Promise<T> {
   const cacheKey = buildCacheKey(shard, path, params, cacheKeyOverride);
   const cached = await readCache(cacheKey);
+  // 조금 전에 실패한 조회면 PUBG를 또 두드리지 않는다. 상태 코드를 들고 던져,
+  // 호출부가 방금 받은 실패와 똑같이 다루게 한다.
+  if (isFailureMark(cached)) throw new CachedPubgFailure(cached.pubgFailed);
   if (cached !== null) return cached as T;
   return (await fetchAndStore(shard, path, params, ttl, cacheKey, transform, timeout)) as T;
 }
@@ -191,6 +262,14 @@ export async function proxyPubg(
 
   // 캐시 있으면 PUBG 호출 없이 반환 (rate limit 절약)
   const cached = await readCache(cacheKey);
+  // 실패도 캐시에 담기므로 성공값과 갈라야 한다. 안 가르면 `{"pubgFailed":404}`가
+  // 200으로 나가고, 브라우저는 그걸 정상 응답으로 읽는다.
+  if (isFailureMark(cached)) {
+    return Response.json(
+      { error: `PUBG ${cached.pubgFailed}` },
+      { status: cached.pubgFailed, headers: { "X-Cache": "HIT" } },
+    );
+  }
   if (cached !== null) {
     return Response.json(cached, { headers: { "X-Cache": "HIT" } });
   }

@@ -1,7 +1,7 @@
 import "server-only";
-import axios from "axios";
 import {
   fetchPubgCached,
+  pubgErrorStatus,
   readCachedValue,
   writeCachedValue,
   type ProxyPubgOptions,
@@ -124,7 +124,10 @@ async function lookupPlayer(
     );
     return res.data?.[0] ?? null;
   } catch (err) {
-    if (axios.isAxiosError(err) && err.response?.status === 404) return null;
+    // 방금 받은 404든 캐시에서 되살린 404든 같게 읽는다.
+    // `axios.isAxiosError`만 보면 캐시된 실패가 그 검사를 통과하지 못해,
+    // 없는 닉네임이 "찾을 수 없습니다" 대신 오류 화면이 된다.
+    if (pubgErrorStatus(err) === 404) return null;
     throw err;
   }
 }
