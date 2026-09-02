@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { track, type AnalyticsEvent } from "@/lib/analytics";
+import { track, type AnalyticsEvent, type AnalyticsProperties } from "@/lib/analytics";
 
 /**
  * 서버가 그린 결과를 이벤트로 남긴다.
@@ -18,7 +18,7 @@ export default function TrackEvent({
   properties,
 }: {
   event: AnalyticsEvent;
-  properties?: Record<string, string | number>;
+  properties?: AnalyticsProperties;
 }) {
   // 한 번만 보낸다. React가 개발 모드에서 이펙트를 두 번 돌리므로 그대로 두면 숫자가 배가 된다.
   const sent = useRef(false);

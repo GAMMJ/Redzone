@@ -19,7 +19,29 @@ export type AnalyticsEvent =
   /** 검색했는데 없었다. 오타율과 대소문자 안내가 듣는지 본다. */
   | "player_not_found"
   /** PUBG 분당 10회 한도에 막혔다. **한도 상향 신청의 근거가 되는 값이다.** */
-  | "rate_limited";
+  | "rate_limited"
+  /**
+   * 전적 업데이트를 눌렀다.
+   *
+   * 검색과 똑같이 PUBG 3콜을 쓴다. 한도를 쓰는 동작이 검색만인 줄 알고 세면 실제 소비의
+   * 절반만 보게 된다. 게다가 이건 사용자가 **연달아 누를 수 있는 유일한 동작**이다.
+   */
+  | "player_refreshed"
+  /**
+   * 최근 매치 페이지를 옮겼다.
+   *
+   * PUBG가 매치 id를 210개 내려주는데 그중 몇 개를 캐시할지는 "사람들이 얼마나 깊이
+   * 보는가"에 달렸다. 그 분포를 여기서 얻는다.
+   */
+  | "matches_paged"
+  /**
+   * 매치 카드를 펼쳤다.
+   *
+   * 펼치면 매치 상세와 텔레메트리를 부른다. 텔레메트리는 이 앱에서 제일 무거운 응답이라
+   * 대역폭이 여기서 갈린다. 접는 건 세지 않는다 — 버튼 하나가 두 동작을 겸해서
+   * autocapture는 둘을 구분하지 못한다.
+   */
+  | "match_expanded";
 
 /**
  * 이벤트 하나를 보낸다. 실패해도 화면에 영향을 주지 않는다.
@@ -27,7 +49,10 @@ export type AnalyticsEvent =
  * 닉네임은 넣지 않는다. 공개된 게임 핸들이긴 하지만 애널리틱스에 쌓을 이유가 없고,
  * 넣는 순간 "누가 누구를 찾아봤나"가 남는다. 우리가 알고 싶은 건 횟수와 비율이다.
  */
-export function track(event: AnalyticsEvent, properties?: Record<string, string | number>): void {
+/** 이벤트에 딸리는 값. 중첩 없이 평평하게 — 대시보드에서 바로 나눠 볼 수 있는 형태만 담는다. */
+export type AnalyticsProperties = Record<string, string | number | boolean>;
+
+export function track(event: AnalyticsEvent, properties?: AnalyticsProperties): void {
   try {
     posthog.capture(event, properties);
   } catch {
