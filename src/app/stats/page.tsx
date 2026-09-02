@@ -8,7 +8,7 @@ import PersonalStats, { parseMode } from "@/components/stats/PersonalStats";
 import PersonalStatsSkeleton from "@/components/stats/PersonalStatsSkeleton";
 import OnlinePlayers from "@/components/stats/OnlinePlayers";
 import {
-  getPlayerByName,
+  getPlayerIdByName,
   getLifetime,
   getWeaponMastery,
   getSurvivalMastery,
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
  * (playerConstants.ts 참고).
  */
 async function loadStats(platform: string, name: string) {
-  const player = await getPlayerByName(platform, name);
+  const player = await getPlayerIdByName(platform, name);
   if (!player) return null;
 
   const [lifetime, weapons, survival] = await Promise.all([
