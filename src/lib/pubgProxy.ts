@@ -5,7 +5,14 @@ import { Redis } from "@upstash/redis";
 
 const PUBG_API_KEY = process.env.PUBG_API_KEY ?? "";
 const PUBG_BASE_URL = "https://api.pubg.com";
-const CACHE_TTL = 60; // seconds — PUBG 응답 캐시 유지 시간
+
+// TTL에 기본값을 두지 않는다.
+//
+// 예전에는 60초가 기본이었는데, 그건 "적절하다"가 아니라 "정하지 않았다"는 뜻이었다.
+// 세 호출이 인자를 빠뜨려 그 값을 그대로 썼고, 전적 페이지가 PUBG 호출 4회 중 3회를
+// 거의 매번 새로 쓰고 있었다. 분당 한도가 10회인데 그게 조용히 새고 있었다.
+//
+// 필수 인자로 두면 다음에 빠뜨릴 때 컴파일이 선다. 주석으로는 못 막는다.
 
 // ms — 개별 PUBG 호출 상한. 응답 없는 소켓 하나가 호출부를 무한정 붙잡지 못하게 막는 안전장치라
 // 기본값은 넉넉히 잡는다. 짧게 잡으면 평소 느린 시간대에 정상 응답까지 끊겨,
@@ -161,8 +168,8 @@ export async function writeCachedValueIfAbsent(
 export async function fetchPubgCached<T = unknown>(
   shard: string,
   path: string,
-  params: Record<string, string> = {},
-  ttl: number = CACHE_TTL,
+  params: Record<string, string>,
+  ttl: number,
   { cacheKey: cacheKeyOverride, transform, timeout }: ProxyPubgOptions = {},
 ): Promise<T> {
   const cacheKey = buildCacheKey(shard, path, params, cacheKeyOverride);
@@ -176,8 +183,8 @@ export async function fetchPubgCached<T = unknown>(
 export async function proxyPubg(
   shard: string,
   path: string,
-  params: Record<string, string> = {},
-  ttl: number = CACHE_TTL,
+  params: Record<string, string>,
+  ttl: number,
   { cacheKey: cacheKeyOverride, transform, timeout }: ProxyPubgOptions = {},
 ): Promise<Response> {
   const cacheKey = buildCacheKey(shard, path, params, cacheKeyOverride);
