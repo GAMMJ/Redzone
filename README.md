@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RedZone (레드존)
 
-## Getting Started
+PUBG Open API 기반 배틀그라운드 전적 분석 플랫폼입니다. 플레이어 프로필과 랭킹을 서버에서 렌더링해 검색 노출을 지원하고, Redis 캐싱으로 PUBG API 호출량과 대기 시간을 줄이는 것을 목표로 합니다.
 
-First, run the development server:
+## 프로젝트 설명
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+PUBG API로 Steam·Kakao 플레이어의 경쟁전·일반전 기록, 최근 매치, 상세 경기 정보를 모아 한눈에 볼 수 있게 제공합니다. API 요청은 서버에서 처리하고 검색 노출이 필요한 프로필·랭킹 화면은 SSR로 제공하며, 매치 텔레메트리를 가공해 API 기본 응답에 없는 경기 지표도 보여줍니다.
+
+## 주제 선정 이유
+
+배틀그라운드 전적에는 플레이어의 시즌 성적뿐 아니라 매치별 전투 흐름과 행동 데이터가 쌓입니다. 이를 검색 가능한 프로필과 읽기 쉬운 통계로 제공하고 싶었습니다. 또한 PUBG API의 호출 제한과 큰 텔레메트리 응답을 다루며 캐싱, 서버 렌더링, 데이터 가공을 실제 서비스에 맞게 설계하는 것을 목표로 삼았습니다.
+
+## 기술 스택
+
+| 구분 | 기술 | 선택 이유 |
+|---|---|---|
+| 프레임워크 | Next.js 16, React 19, TypeScript | App Router 서버 렌더링으로 프로필·랭킹을 검색 엔진에 노출하고 타입 안정성을 확보 |
+| 스타일링 | Tailwind CSS 4 | 공통 디자인 토큰과 반응형 화면을 일관되게 구성 |
+| 상태 관리 | TanStack Query, Zustand | 서버 데이터 캐싱·재요청과 검색 기록 등 브라우저 상태 관리 |
+| API 통신 | PUBG Open API, axios, Next.js Route Handler | API 키를 서버에 두고 PUBG 요청을 프록시에서 제어 |
+| 캐시 | Upstash Redis | 반복 조회 결과를 TTL 기반으로 보관해 외부 API 호출을 절약 |
+| 시각화 | Recharts | 플레이어 통계와 게임 지표를 차트로 표현 |
+| 배포 | Vercel | Next.js 서버 렌더링 및 Route Handler 배포 |
+
+## 실행 방법
+
+### 준비 사항
+
+- Node.js
+- pnpm
+- PUBG API 키
+
+프로젝트 루트에 `.env.local` 파일을 만들고 값을 설정합니다.
+
+```env
+PUBG_API_KEY=발급받은_PUBG_API_키
+UPSTASH_REDIS_REST_URL=Upstash_Redis_URL
+UPSTASH_REDIS_REST_TOKEN=Upstash_Redis_Token
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Redis 환경 변수는 캐시를 사용할 때 설정합니다. 로컬에서 Redis가 없으면 캐시를 건너뛰고 실행할 수 있습니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 설치 및 개발 서버 실행
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm install
+pnpm dev
+```
 
-## Learn More
+브라우저에서 [http://localhost:3000](http://localhost:3000)을 엽니다.
 
-To learn more about Next.js, take a look at the following resources:
+### 프로덕션 빌드 및 실행
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+pnpm build
+pnpm start
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 주요 구현
 
-## Deploy on Vercel
+- **검색 노출을 고려한 렌더링:** 플레이어·랭킹 페이지는 서버 컴포넌트에서 데이터를 가져오고 `generateMetadata`로 페이지 메타데이터를 생성합니다. 탭이나 필터처럼 상호작용이 필요한 부분은 클라이언트 컴포넌트로 분리했습니다.
+- **API 프록시와 캐싱:** 브라우저에서 PUBG API를 직접 호출하지 않고 `/api/pubg` Route Handler를 거치게 해 API 키를 보호합니다. Upstash Redis에 응답을 TTL 기반으로 캐싱해 중복 요청과 API 한도 소모를 줄입니다.
+- **매치 텔레메트리 요약:** 경기 텔레메트리 이벤트를 한 번 순회해 킬·기절·부활·무기·받은 피해 데이터를 추출하고, 원본보다 작은 요약 결과를 캐싱해 매치 상세 화면에서 사용합니다.
+- **경기 분석 화면:** 매치 참가자 통계와 함께 킬 로그, 킬 위치 지도, 주 무기와 받은 피해 정보를 확인할 수 있습니다.
+- **탐색 상태 복원:** 매치 상세에서 다른 플레이어 프로필로 이동한 뒤 돌아와도 펼친 매치, 선택한 탭, 스크롤 위치를 복원하고 봇 계정은 프로필 링크 대상에서 제외합니다.
+- **성능 최적화:** 사전 압축된 WebP 이미지를 사용하고 차트 등 무거운 컴포넌트는 동적 로딩으로 분리합니다.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 트러블슈팅
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 1. 매치 API에 없는 받은 피해·주 무기 데이터
+
+**문제:** 매치 기본 응답에는 받은 피해가 없었습니다. 공식 `allWeaponStats`도 참가자 전체의 주 무기를 제공하지 않고 일부 플레이어 데이터만 포함했습니다. 텔레메트리는 한 경기당 압축 약 2.5MB, 해제 시 약 31.7MB에 이벤트 5만여 개로 그대로 화면에 쓰기에는 컸습니다.
+
+**해결:** 텔레메트리 이벤트를 한 번 순회해 필요한 값만 추리는 요약 계층을 만들었습니다. 주 무기는 `LogPlayerTakeDamage` 이벤트에서 플레이어별 가한 피해량을 무기별로 합산해 정하고, 계산 결과만 캐싱했습니다. 요약 결과는 약 32.6KB로 원본 텔레메트리보다 크게 줄었습니다.
+
+### 2. 킬 위치 마커가 지도 좌표와 어긋나는 문제
+
+**문제:** 게임 텔레메트리의 월드 좌표를 지도 이미지 픽셀 좌표로 단순 변환해 마커를 표시하자, 가장자리로 갈수록 위치 오차가 커졌습니다. 확대 상태에서도 가장자리 마커가 화면 밖으로 밀리는 문제가 있었습니다.
+
+**해결:** 맵마다 실제 크기가 다른 점을 반영해 맵별 크기로 좌표를 나누고 0~1 범위의 비율로 정규화했습니다. 정규화한 좌표를 지도 이미지 크기에 맞춰 표시해 화면 크기가 달라도 같은 위치에 마커가 놓이게 했습니다.
+
+### 3. 다른 프로필을 보고 돌아오면 매치 탐색 상태가 사라지는 문제
+
+**문제:** 매치 상세에서 참가자 프로필로 이동한 뒤 돌아오면 펼쳐둔 매치 카드, 선택 탭, 스크롤 위치가 초기화됐습니다. 봇 참가자는 닉네임만으로 실제 플레이어와 구분하기 어려워 잘못된 프로필 링크가 404로 이어질 수도 있었습니다.
+
+**해결:** 페이지 이탈 전에 매치 목록의 스크롤·열림 상태·선택 정보를 보존하고 복귀 시 복원했습니다. 참가자 데이터의 봇 여부를 기준으로 봇 프로필 링크를 만들지 않도록 처리했습니다.
+
+## 데모 및 링크
+
+- [프로젝트 소개 페이지](https://portfolio-five-pearl-m0065y0g6g.vercel.app/projects/redzon)
+- [GitHub 저장소](https://github.com/GAMMJ/Redzon)
+- [화면 데모 영상](docs/assets/redzon-demo.mp4)
+
+## 프로젝트 구조
+
+- `src/app/` — 홈, 플레이어, 랭킹, 통계 페이지와 API Route Handler
+- `src/components/` — 페이지별 화면 및 공통 UI 컴포넌트
+- `src/hooks/` — 검색·매치 등 클라이언트 데이터 훅
+- `src/lib/` — PUBG 데이터 처리, 텔레메트리 분석, 캐시 및 공통 유틸리티
+- `src/store/` — 브라우저 상태 저장소
+- `src/types/` — 플레이어·랭킹·매치 타입
+- `public/` — 티어·맵·아이콘 이미지
+
+## 개발 참고
+
+- 패키지 매니저는 pnpm을 사용합니다.
+- PUBG API 키가 포함된 `.env.local`은 저장소에 커밋하지 않습니다.
+- PUBG API 호출은 서버 프록시를 통해서만 수행합니다.
